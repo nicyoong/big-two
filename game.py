@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Literal, Protocol
+from typing import Literal
 
+from bot import BotBrain, Move, PassMove, RandomLegalBot
 from card import Card, create_standard_deck
 
 
@@ -30,21 +31,6 @@ class InvalidMoveError(GameError):
     """Raised when a move is not legal for the current game state."""
 
 
-class BotBrain(Protocol):
-    def choose_move(self, observation: "Observation") -> "Move":
-        """Choose a move using only the provided observation."""
-
-
-@dataclass
-class SimpleBotBrain:
-    def choose_move(self, observation: "Observation") -> "Move":
-        if observation.is_starting_new_trick:
-            if observation.must_include_card is not None:
-                return Move(cards=(observation.must_include_card,))
-            return Move(cards=(observation.my_hand[0],))
-        return Move.pass_move()
-
-
 @dataclass
 class PlayerSeat:
     seat_id: str
@@ -66,20 +52,6 @@ class PublicSeat:
     seat_id: str
     name: str
     kind: PlayerKind
-
-
-@dataclass(frozen=True)
-class Move:
-    cards: tuple[Card, ...] = ()
-    is_pass: bool = False
-
-    @classmethod
-    def play(cls, cards: list[Card] | tuple[Card, ...]) -> "Move":
-        return cls(cards=tuple(cards), is_pass=False)
-
-    @classmethod
-    def pass_move(cls) -> "Move":
-        return cls(cards=(), is_pass=True)
 
 
 @dataclass(frozen=True)
@@ -157,7 +129,7 @@ class BigTwoGame:
                         seat_id=seat_id,
                         name=f"Bot {bot_number}",
                         kind="bot",
-                        bot_brain=SimpleBotBrain(),
+                        bot_brain=RandomLegalBot(),
                     )
                 )
 
@@ -202,9 +174,9 @@ class BigTwoGame:
             must_include_card=self._must_include_card(),
         )
 
-    def apply_move(self, seat_id: str, move: Move) -> PublicEvent:
+    def apply_move(self, seat_id: str, move: Move | PassMove) -> PublicEvent:
         self._require_can_act(seat_id)
-        if move.is_pass:
+        if isinstance(move, PassMove):
             return self.pass_turn(seat_id)
 
         cards = tuple(move.cards)

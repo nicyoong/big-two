@@ -1,7 +1,8 @@
 import pytest
 
+from bot import Move
 from card import Card
-from game import BigTwoGame, Move
+from game import BigTwoGame
 
 
 @pytest.mark.parametrize("human_count", [1, 2, 3, 4])
@@ -62,7 +63,7 @@ def test_public_history_records_plays_and_passes() -> None:
     game = BigTwoGame.new(human_count=4)
     starting_seat_id = game.current_turn_seat_id
 
-    game.apply_move(starting_seat_id, Move.play([Card.from_text("3D")]))
+    game.apply_move(starting_seat_id, Move([Card.from_text("3D")]))
     passing_seat_id = game.current_turn_seat_id
     game.pass_turn(passing_seat_id)
 
