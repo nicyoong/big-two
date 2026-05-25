@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from bot import BotBrain, Move, PassMove, generate_legal_plays
+from logic import Strategy, Move, PassMove, generate_legal_plays
 from card import Card, Rank
 from rules import play_strength
 
@@ -12,7 +12,7 @@ if TYPE_CHECKING:
 
 
 @dataclass
-class ComboPreservingBot(BotBrain):
+class ComboPreservation(Strategy):
     def choose_move(self, observation: "Observation") -> Move | PassMove:
         legal_plays = generate_legal_plays(
             hand=observation.my_hand,

@@ -22,7 +22,7 @@ class PassMove:
     pass
 
 
-class BotBrain:
+class Strategy:
     def choose_move(self, observation: "Observation") -> Move | PassMove:
         raise NotImplementedError
 

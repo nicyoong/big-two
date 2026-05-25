@@ -4,7 +4,7 @@ from dataclasses import dataclass
 import random
 
 @dataclass(frozen=True)
-class BotPersonality:
+class Personality:
     penalty_two: int
     penalty_ace: int
     best_score_threshold_worse_hand: int
@@ -12,7 +12,7 @@ class BotPersonality:
     endgame_control_reduction_factor: int
 
     @classmethod
-    def create_random(cls, seed: int | None = None) -> "BotPersonality":
+    def create_random(cls, seed: int | None = None) -> "Personality":
         rng = random.Random(seed)
         return cls(
             penalty_two=rng.randint(30, 70),           # Mean ~50
@@ -23,7 +23,7 @@ class BotPersonality:
         )
 
     @classmethod
-    def create_default(cls) -> "BotPersonality":
+    def create_default(cls) -> "Personality":
         return cls(
             penalty_two=50,
             penalty_ace=20,
@@ -32,7 +32,7 @@ class BotPersonality:
             endgame_control_reduction_factor=2,
         )
 
-# --- Tactical Heuristics (control_card_bot.py) ---
+# --- Tactical Heuristics (control_card_strategy.py) ---
 PENALTY_TWO = 50
 PENALTY_ACE = 20
 PENALTY_KING = 15
@@ -46,7 +46,7 @@ STRONG_REMAINING_HAND_THRESHOLD = 25
 EXPENSIVE_MOVE_THRESHOLD = 80
 BEST_SCORE_THRESHOLD_WORSE_HAND = 100
 
-# --- Phase Heuristics (phase_aware_bot.py) ---
+# --- Phase Heuristics (phase_awareness.py) ---
 PHASE_THRESHOLD_OPENING = 9
 PHASE_THRESHOLD_MIDDLE = 4
 OPENING_WEAK_FIVE_BONUS = -25

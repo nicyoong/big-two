@@ -3,13 +3,12 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
-from bot import BotBrain, Move, PassMove, generate_legal_plays
+from logic import Strategy, Move, PassMove, generate_legal_plays
 from card import Card, Rank
-from combo_preserving_bot import _remove_cards, score_move_level_2
-from control_card_bot import control_card_penalty
+from combo_preservation import _remove_cards, score_move_level_2
+from control_card_strategy import control_card_penalty
 from game import recently_passed_on_kind, recently_passed_on_size
 from heuristics import (
-    BotPersonality,
     DANGER_LEVEL_1_CARD,
     DANGER_LEVEL_2_CARDS,
     DANGER_LEVEL_3_4_CARDS,
@@ -20,8 +19,9 @@ from heuristics import (
     OPPONENT_1_CARD_START_LOW_SINGLE_PENALTY,
     OPPONENT_1_CARD_START_MULTI_CARD_BONUS,
     OPPONENT_2_CARDS_START_WEAK_PAIR_PENALTY,
+    Personality,
 )
-from phase_aware_bot import GamePhase, get_game_phase, phase_adjustment
+from phase_awareness import GamePhase, get_game_phase, phase_adjustment
 from rules import PlayCategory, classify_play
 
 if TYPE_CHECKING:
@@ -29,8 +29,8 @@ if TYPE_CHECKING:
 
 
 @dataclass
-class OpponentAwareBot(BotBrain):
-    personality: BotPersonality = field(default_factory=BotPersonality.create_random)
+class OpponentAwareBot(Strategy):
+    personality: Personality = field(default_factory=Personality.create_random)
 
     def choose_move(self, observation: "Observation") -> Move | PassMove:
         legal_plays = generate_legal_plays(
@@ -59,7 +59,7 @@ class OpponentAwareBot(BotBrain):
         # PRODUCTION LOGIC: Integrate "Smart Pass" from supporting modules
         # Only consider passing if we are not in the Endgame.
         if get_game_phase(len(observation.my_hand)) != GamePhase.ENDGAME:
-            from control_card_bot import should_pass
+            from control_card_strategy import should_pass
             if should_pass(observation, best_move, best_score, self.personality):
                 return PassMove()
 

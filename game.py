@@ -4,13 +4,13 @@ import random
 from dataclasses import dataclass, field
 from typing import ClassVar, Literal
 
-from bot import BotBrain, Move, PassMove
-from random_legal_bot import RandomLegalBot
+from logic import Strategy, Move, PassMove
+from random_legal_play import RandomLegalPlay
 from card import Card, create_standard_deck
 from rules import InvalidPlayError, can_beat, classify_play
 
 
-PlayerKind = Literal["human", "bot"]
+PlayerKind = Literal["human", "logic"]
 
 
 class GameError(ValueError):
@@ -38,15 +38,15 @@ class PlayerSeat:
     seat_id: str
     name: str
     kind: PlayerKind
-    bot_brain: BotBrain | None = None
+    strategy: Strategy | None = None
 
     def __post_init__(self) -> None:
-        if self.kind not in ("human", "bot"):
+        if self.kind not in ("human", "logic"):
             raise ValueError(f"Invalid player kind: {self.kind!r}")
-        if self.kind == "human" and self.bot_brain is not None:
-            raise ValueError("Human seats cannot have a bot brain")
-        if self.kind == "bot" and self.bot_brain is None:
-            raise ValueError("Bot seats require a bot brain")
+        if self.kind == "human" and self.strategy is not None:
+            raise ValueError("Human seats cannot have a strategy")
+        if self.kind == "logic" and self.strategy is None:
+            raise ValueError("Logic seats require a strategy")
 
 
 @dataclass(frozen=True)
@@ -156,13 +156,13 @@ class BigTwoGame:
                 name = human_names[index] if index < len(human_names) else f"Player {index + 1}"
                 seats.append(PlayerSeat(seat_id=seat_id, name=name, kind="human"))
             else:
-                bot_number = index - human_count + 1
+                logic_number = index - human_count + 1
                 seats.append(
                     PlayerSeat(
                         seat_id=seat_id,
-                        name=f"Bot {bot_number}",
-                        kind="bot",
-                        bot_brain=RandomLegalBot(),
+                        name=f"Logic {logic_number}",
+                        kind="logic",
+                        strategy=RandomLegalPlay(),
                     )
                 )
 
@@ -244,7 +244,7 @@ class BigTwoGame:
         if self.current_play is None:
             # Check if player actually has ANY legal plays. 
             # If they don't (e.g. only have 2S and it's their last card), allow passing.
-            from bot import generate_legal_plays
+            from logic import generate_legal_plays
             legal = generate_legal_plays(self.hands[seat_id], self.current_play, self._must_include_card())
             if legal:
                 raise InvalidMoveError("Cannot pass when starting a new trick")

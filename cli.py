@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from bot import Move, PassMove
+from logic import Move, PassMove
 from card import Card, InvalidCardError
 from game import BigTwoGame, GameError, PassedEvent, PlayedEvent, PlayerSeat, TrickResetEvent, WinEvent
 from opponent_aware_bot import OpponentAwareBot
@@ -25,7 +25,7 @@ def run_cli(
     human_count = prompt_human_count(input_func, output_func)
     human_names = prompt_human_names(human_count, input_func)
     game = BigTwoGame.new(human_count=human_count, human_names=human_names)
-    configure_cli_bots(game)
+    configure_cli_strategies(game)
 
     output_func("")
     output_func("Game started.")
@@ -34,8 +34,8 @@ def run_cli(
     while game.winner is None:
         seat = current_seat(game)
         output_turn_summary(game, seat, output_func)
-        if seat.kind == "bot":
-            play_bot_turn(game, seat, output_func)
+        if seat.kind == "logic":
+            play_logic_turn(game, seat, output_func)
         else:
             play_human_turn(game, seat, input_func, output_func)
 
@@ -64,18 +64,18 @@ def prompt_human_names(human_count: int, input_func: InputFunc) -> list[str]:
     return names
 
 
-def configure_cli_bots(game: BigTwoGame) -> None:
+def configure_cli_strategies(game: BigTwoGame) -> None:
     for seat in game.seats:
-        if seat.kind == "bot":
-            seat.bot_brain = OpponentAwareBot()
+        if seat.kind == "logic":
+            seat.strategy = OpponentAwareBot()
 
 
-def play_bot_turn(game: BigTwoGame, seat: PlayerSeat, output_func: OutputFunc) -> None:
-    if seat.bot_brain is None:
-        raise RuntimeError(f"Bot seat {seat.seat_id!r} has no bot brain")
+def play_logic_turn(game: BigTwoGame, seat: PlayerSeat, output_func: OutputFunc) -> None:
+    if seat.strategy is None:
+        raise RuntimeError(f"Logic seat {seat.seat_id!r} has no strategy")
 
     observation = game.create_observation(seat.seat_id)
-    move = seat.bot_brain.choose_move(observation)
+    move = seat.strategy.choose_move(observation)
     event = game.apply_move(seat.seat_id, move)
     output_func(format_event(game, event))
 

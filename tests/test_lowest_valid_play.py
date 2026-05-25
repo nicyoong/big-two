@@ -1,7 +1,7 @@
-from bot import Move, PassMove
+from logic import Move, PassMove
 from card import Card
 from game import Observation, Play
-from lowest_valid_bot import LowestValidBot
+from lowest_valid_play import LowestValidPlay
 
 
 def make_observation(
@@ -26,19 +26,19 @@ def make_observation(
 
 
 def test_lowest_valid_bot_first_move_with_three_diamonds_must_include_three_diamonds() -> None:
-    bot = LowestValidBot()
+    logic = LowestValidPlay()
     observation = make_observation(
         my_hand=[Card.from_text("3D"), Card.from_text("4D"), Card.from_text("5D")],
         must_include_card=Card.from_text("3D"),
     )
 
-    move = bot.choose_move(observation)
+    move = logic.choose_move(observation)
 
     assert move == Move([Card.from_text("3D")])
 
 
 def test_lowest_valid_bot_plays_weakest_single_that_beats_current_single() -> None:
-    bot = LowestValidBot()
+    logic = LowestValidPlay()
     observation = make_observation(
         my_hand=[
             Card.from_text("7C"),
@@ -49,13 +49,13 @@ def test_lowest_valid_bot_plays_weakest_single_that_beats_current_single() -> No
         current_play=Play(seat_id="seat-2", cards=(Card.from_text("7D"),)),
     )
 
-    move = bot.choose_move(observation)
+    move = logic.choose_move(observation)
 
     assert move == Move([Card.from_text("7C")])
 
 
 def test_lowest_valid_bot_plays_weakest_pair_that_beats_current_pair() -> None:
-    bot = LowestValidBot()
+    logic = LowestValidPlay()
     observation = make_observation(
         my_hand=[
             Card.from_text("8H"),
@@ -68,30 +68,30 @@ def test_lowest_valid_bot_plays_weakest_pair_that_beats_current_pair() -> None:
         current_play=Play(seat_id="seat-2", cards=tuple(Card.from_text(card) for card in ["8D", "8C"])),
     )
 
-    move = bot.choose_move(observation)
+    move = logic.choose_move(observation)
 
     assert move == Move([Card.from_text("8H"), Card.from_text("8S")])
 
 
 def test_lowest_valid_bot_passes_when_no_response_is_possible() -> None:
-    bot = LowestValidBot()
+    logic = LowestValidPlay()
     observation = make_observation(
         my_hand=[Card.from_text("7D"), Card.from_text("7C"), Card.from_text("8D")],
         current_play=Play(seat_id="seat-2", cards=tuple(Card.from_text(card) for card in ["8H", "8S"])),
     )
 
-    move = bot.choose_move(observation)
+    move = logic.choose_move(observation)
 
     assert isinstance(move, PassMove)
 
 
 def test_lowest_valid_bot_is_deterministic_across_repeated_calls() -> None:
-    bot = LowestValidBot()
+    logic = LowestValidPlay()
     observation = make_observation(
         my_hand=[Card.from_text("7C"), Card.from_text("7S"), Card.from_text("8D")],
         current_play=Play(seat_id="seat-2", cards=(Card.from_text("7D"),)),
     )
 
-    moves = [bot.choose_move(observation) for _ in range(5)]
+    moves = [logic.choose_move(observation) for _ in range(5)]
 
     assert moves == [Move([Card.from_text("7C")])] * 5

@@ -1,17 +1,26 @@
 from __future__ import annotations
 
+import random
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from bot import BotBrain, Move, PassMove, generate_legal_plays
-from rules import play_strength
+from logic import Strategy, Move, PassMove, generate_legal_plays
 
 if TYPE_CHECKING:
     from game import Observation
 
 
 @dataclass
-class LowestValidBot(BotBrain):
+class RandomLegalPlay(Strategy):
+    rng: random.Random
+
+    def __init__(
+        self,
+        seed: int | str | bytes | bytearray | None = None,
+        rng: random.Random | None = None,
+    ) -> None:
+        self.rng = rng if rng is not None else random.Random(seed)
+
     def choose_move(self, observation: "Observation") -> Move | PassMove:
         legal_plays = generate_legal_plays(
             hand=observation.my_hand,
@@ -20,4 +29,4 @@ class LowestValidBot(BotBrain):
         )
         if not legal_plays:
             return PassMove()
-        return Move(cards=list(sorted(legal_plays, key=play_strength)[0]))
+        return Move(cards=list(self.rng.choice(legal_plays)))

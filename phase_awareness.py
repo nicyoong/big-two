@@ -4,12 +4,12 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import TYPE_CHECKING
 
-from bot import BotBrain, Move, PassMove, generate_legal_plays
+from logic import Strategy, Move, PassMove, generate_legal_plays
 from card import Card, Rank
-from combo_preserving_bot import _remove_cards, _would_break_pair, _would_break_triple, score_move_level_2
-from control_card_bot import control_card_penalty, should_pass
+from combo_preservation import _remove_cards, _would_break_pair, _would_break_triple, score_move_level_2
+from control_card_strategy import control_card_penalty, should_pass
 from heuristics import (
-    BotPersonality,
+    Personality,
     ENDGAME_CARD_SHED_BONUS,
     ENDGAME_CONTROL_REDUCTION_FACTOR,
     ENDGAME_SINGLE_PENALTY,
@@ -41,8 +41,8 @@ class GamePhase(Enum):
 
 
 @dataclass
-class PhaseAwareBot(BotBrain):
-    personality: BotPersonality = field(default_factory=BotPersonality.create_random)
+class PhaseAwareness(Strategy):
+    personality: Personality = field(default_factory=Personality.create_random)
 
     def choose_move(self, observation: "Observation") -> Move | PassMove:
         legal_plays = generate_legal_plays(
@@ -79,7 +79,7 @@ def get_game_phase(my_card_count: int) -> GamePhase:
     return GamePhase.ENDGAME
 
 
-def phase_adjustment(observation: "Observation", move: Move, remaining_hand: list[Card], personality: BotPersonality | None = None) -> int:
+def phase_adjustment(observation: "Observation", move: Move, remaining_hand: list[Card], personality: Personality | None = None) -> int:
     phase = get_game_phase(len(observation.my_hand))
     if phase == GamePhase.OPENING:
         return _opening_adjustment(observation, move, personality)
@@ -88,9 +88,9 @@ def phase_adjustment(observation: "Observation", move: Move, remaining_hand: lis
     return _endgame_adjustment(move, remaining_hand, personality)
 
 
-def _opening_adjustment(observation: "Observation", move: Move, personality: BotPersonality | None = None) -> int:
+def _opening_adjustment(observation: "Observation", move: Move, personality: Personality | None = None) -> int:
     score = 0
-    p = personality or BotPersonality.create_default()
+    p = personality or Personality.create_default()
     # Opening: weak five-card hands are good leads because they shed cards without spending controls.
     if observation.is_starting_new_trick and len(move.cards) == 5 and _is_weak_five_card_play(move):
         score += OPENING_WEAK_FIVE_BONUS
@@ -119,9 +119,9 @@ def _middle_adjustment(move: Move, remaining_hand: list[Card]) -> int:
     return score
 
 
-def _endgame_adjustment(move: Move, remaining_hand: list[Card], personality: BotPersonality | None = None) -> int:
+def _endgame_adjustment(move: Move, remaining_hand: list[Card], personality: Personality | None = None) -> int:
     score = 0
-    p = personality or BotPersonality.create_default()
+    p = personality or Personality.create_default()
     # Endgame: shedding cards matters twice as much.
     score += p.endgame_card_shed_bonus * len(move.cards)
     # Endgame: leaving one strong out is good, leaving one weak out is risky.
@@ -133,9 +133,9 @@ def _endgame_adjustment(move: Move, remaining_hand: list[Card], personality: Bot
     return score
 
 
-def _phase_control_penalty(observation: "Observation", move: Move, personality: BotPersonality | None = None) -> int:
+def _phase_control_penalty(observation: "Observation", move: Move, personality: Personality | None = None) -> int:
     penalty = control_card_penalty(move, observation, personality)
-    p = personality or BotPersonality.create_default()
+    p = personality or Personality.create_default()
     phase = get_game_phase(len(observation.my_hand))
     if phase == GamePhase.OPENING:
         return penalty
@@ -145,7 +145,7 @@ def _phase_control_penalty(observation: "Observation", move: Move, personality: 
     return penalty // p.endgame_control_reduction_factor
 
 
-def _phase_should_pass(observation: "Observation", move: Move, score: int, personality: BotPersonality | None = None) -> bool:
+def _phase_should_pass(observation: "Observation", move: Move, score: int, personality: Personality | None = None) -> bool:
     if get_game_phase(len(observation.my_hand)) == GamePhase.ENDGAME:
         return False
     return should_pass(observation, move, score, personality)

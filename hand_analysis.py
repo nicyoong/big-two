@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections import Counter, defaultdict
 from dataclasses import dataclass
 
-from bot import generate_legal_plays
+from logic import generate_legal_plays
 from card import Card, Rank, Suit
 from game import Play
 from rules import PlayCategory, classify_play, play_strength

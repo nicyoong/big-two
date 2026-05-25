@@ -1,8 +1,8 @@
 import pytest
 
-from bot import Move, PassMove
+from logic import Move, PassMove
 from card import Card
-from cli import configure_cli_bots, format_cards, parse_move, play_bot_turn
+from cli import configure_cli_strategies, format_cards, parse_move, play_logic_turn
 from game import BigTwoGame
 from opponent_aware_bot import OpponentAwareBot
 
@@ -26,24 +26,24 @@ def test_format_cards_sorts_cards() -> None:
     assert format_cards([Card.from_text("4D"), Card.from_text("3S"), Card.from_text("3D")]) == "3D 3S 4D"
 
 
-def test_configure_cli_bots_uses_independent_opponent_aware_bots() -> None:
+def test_configure_cli_strategies_uses_independent_opponent_aware_strategies() -> None:
     game = BigTwoGame.new(human_count=1, seed=1)
 
-    configure_cli_bots(game)
+    configure_cli_strategies(game)
 
-    bot_brains = [seat.bot_brain for seat in game.seats if seat.kind == "bot"]
-    assert all(isinstance(brain, OpponentAwareBot) for brain in bot_brains)
-    assert len({id(brain) for brain in bot_brains}) == len(bot_brains)
+    strategies = [seat.strategy for seat in game.seats if seat.kind == "logic"]
+    assert all(isinstance(brain, OpponentAwareBot) for brain in strategies)
+    assert len({id(brain) for brain in strategies}) == len(strategies)
 
 
-def test_play_bot_turn_uses_observation_and_records_public_event() -> None:
+def test_play_logic_turn_uses_observation_and_records_public_event() -> None:
     game = BigTwoGame.new(human_count=1)
-    bot_seat = next(seat for seat in game.seats if seat.kind == "bot")
-    game.current_turn_seat_id = bot_seat.seat_id
-    game.hands[bot_seat.seat_id] = [Card.from_text("3D"), Card.from_text("4D")]
+    logic_seat = next(seat for seat in game.seats if seat.kind == "logic")
+    game.current_turn_seat_id = logic_seat.seat_id
+    game.hands[logic_seat.seat_id] = [Card.from_text("3D"), Card.from_text("4D")]
     messages: list[str] = []
 
-    play_bot_turn(game, bot_seat, messages.append)
+    play_logic_turn(game, logic_seat, messages.append)
 
     assert len(game.public_history) == 1
     assert game.public_history[0].event_type == "play"

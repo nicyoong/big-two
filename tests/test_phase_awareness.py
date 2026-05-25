@@ -1,7 +1,7 @@
-from bot import Move
+from logic import Move
 from card import Card
 from game import Observation, Play
-from phase_aware_bot import GamePhase, PhaseAwareBot, get_game_phase
+from phase_awareness import GamePhase, PhaseAwareness, get_game_phase
 
 
 def cards(*labels: str) -> list[Card]:
@@ -40,59 +40,59 @@ def test_get_game_phase() -> None:
 
 
 def test_opening_bot_prefers_weak_five_card_hand_over_low_single_when_starting() -> None:
-    bot = PhaseAwareBot()
+    logic = PhaseAwareness()
     observation = make_observation(
         my_hand=cards("3D", "4C", "5H", "6S", "7D", "9D", "JD", "QD", "KD"),
     )
 
-    move = bot.choose_move(observation)
+    move = logic.choose_move(observation)
 
     assert move == Move(cards("3D", "4C", "5H", "6S", "7D"))
 
 
 def test_opening_bot_avoids_using_two() -> None:
-    bot = PhaseAwareBot()
+    logic = PhaseAwareness()
     # 8D, 2D, 3C, 4C, 5C, 6C, 9D, 10D, JH (JH instead of JD to avoid flush)
     observation = make_observation(
         my_hand=cards("8D", "2D", "3C", "4C", "5C", "6C", "9D", "10D", "JH"),
         current_play=Play(seat_id="seat-2", cards=(Card.from_text("7D"),)),
     )
 
-    move = bot.choose_move(observation)
+    move = logic.choose_move(observation)
 
     assert move == Move(cards("8D"))
 
 
 def test_endgame_bot_uses_two_if_it_helps_go_out() -> None:
-    bot = PhaseAwareBot()
+    logic = PhaseAwareness()
     observation = make_observation(
         my_hand=cards("2D"),
         current_play=Play(seat_id="seat-2", cards=(Card.from_text("AH"),)),
     )
 
-    move = bot.choose_move(observation)
+    move = logic.choose_move(observation)
 
     assert move == Move(cards("2D"))
 
 
 def test_endgame_bot_prefers_move_that_leaves_one_high_card_over_one_low_card() -> None:
-    bot = PhaseAwareBot()
+    logic = PhaseAwareness()
     observation = make_observation(
         my_hand=cards("3D", "AD", "AH"),
         current_play=Play(seat_id="seat-2", cards=tuple(cards("KD", "KC"))),
     )
 
-    move = bot.choose_move(observation)
+    move = logic.choose_move(observation)
 
     assert move == Move(cards("AD", "AH"))
 
 
 def test_middle_bot_avoids_move_that_leaves_many_low_singles() -> None:
-    bot = PhaseAwareBot()
+    logic = PhaseAwareness()
     observation = make_observation(
         my_hand=cards("3D", "4C", "5H", "6S", "7D", "8C"),
     )
 
-    move = bot.choose_move(observation)
+    move = logic.choose_move(observation)
 
     assert move == Move(cards("3D", "4C", "5H", "6S", "7D"))

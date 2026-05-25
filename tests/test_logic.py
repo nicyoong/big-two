@@ -1,7 +1,7 @@
 import random
 
-from bot import Move, PassMove, generate_legal_plays
-from random_legal_bot import RandomLegalBot
+from logic import Move, PassMove, generate_legal_plays
+from random_legal_play import RandomLegalPlay
 from card import Card
 from game import Observation, Play
 
@@ -38,26 +38,26 @@ def make_observation(
     )
 
 
-def test_bot_passes_when_no_legal_plays_exist() -> None:
-    bot = RandomLegalBot(rng=IndexedRandom(0))
+def test_logic_passes_when_no_legal_plays_exist() -> None:
+    strategy = RandomLegalPlay(rng=IndexedRandom(0))
     observation = make_observation(
         my_hand=[Card.from_text("3D")],
         current_play=Play(seat_id="seat-2", cards=tuple(Card.from_text(card) for card in ["4D", "4C"])),
     )
 
-    move = bot.choose_move(observation)
+    move = strategy.choose_move(observation)
 
     assert isinstance(move, PassMove)
 
 
-def test_bot_returns_only_legal_moves() -> None:
-    bot = RandomLegalBot(rng=IndexedRandom(1))
+def test_logic_returns_only_legal_moves() -> None:
+    strategy = RandomLegalPlay(rng=IndexedRandom(1))
     observation = make_observation(
         my_hand=[Card.from_text("3D"), Card.from_text("4D"), Card.from_text("5D")],
         current_play=Play(seat_id="seat-2", cards=(Card.from_text("3C"),)),
     )
 
-    move = bot.choose_move(observation)
+    move = strategy.choose_move(observation)
 
     assert isinstance(move, Move)
     assert tuple(move.cards) in generate_legal_plays(
@@ -67,46 +67,46 @@ def test_bot_returns_only_legal_moves() -> None:
     )
 
 
-def test_bot_respects_must_include_card_on_first_play() -> None:
+def test_logic_respects_must_include_card_on_first_play() -> None:
     required_card = Card.from_text("3D")
-    bot = RandomLegalBot(rng=IndexedRandom(0))
+    strategy = RandomLegalPlay(rng=IndexedRandom(0))
     observation = make_observation(
         my_hand=[required_card, Card.from_text("4D"), Card.from_text("5D")],
         must_include_card=required_card,
     )
 
-    move = bot.choose_move(observation)
+    move = strategy.choose_move(observation)
 
     assert isinstance(move, Move)
     assert required_card in move.cards
 
 
-def test_bot_does_not_need_access_to_opponents_private_hands() -> None:
-    bot = RandomLegalBot(seed=1)
+def test_logic_does_not_need_access_to_opponents_private_hands() -> None:
+    strategy = RandomLegalPlay(seed=1)
     observation = make_observation(
         my_hand=[Card.from_text("3D"), Card.from_text("4D")],
         must_include_card=Card.from_text("3D"),
     )
 
-    move = bot.choose_move(observation)
+    move = strategy.choose_move(observation)
 
     assert isinstance(move, Move)
     assert not hasattr(observation, "hands")
     assert set(observation.card_counts_by_seat) == {"seat-1", "seat-2", "seat-3", "seat-4"}
 
 
-def test_two_bot_instances_make_decisions_independently() -> None:
+def test_two_logic_instances_make_decisions_independently() -> None:
     first_rng = IndexedRandom(0)
     second_rng = IndexedRandom(1)
-    first_bot = RandomLegalBot(rng=first_rng)
-    second_bot = RandomLegalBot(rng=second_rng)
+    first_strategy = RandomLegalPlay(rng=first_rng)
+    second_strategy = RandomLegalPlay(rng=second_rng)
     observation = make_observation(
         my_hand=[Card.from_text("3D"), Card.from_text("4D"), Card.from_text("5D")],
         current_play=Play(seat_id="seat-2", cards=(Card.from_text("3C"),)),
     )
 
-    first_move = first_bot.choose_move(observation)
-    second_move = second_bot.choose_move(observation)
+    first_move = first_strategy.choose_move(observation)
+    second_move = second_strategy.choose_move(observation)
 
     assert isinstance(first_move, Move)
     assert isinstance(second_move, Move)
@@ -115,7 +115,7 @@ def test_two_bot_instances_make_decisions_independently() -> None:
     assert second_rng.calls == 1
 
 
-def test_bot_does_not_play_2_spades_as_last_card() -> None:
+def test_logic_does_not_play_2_spades_as_last_card() -> None:
     two_spades = Card.from_text("2S")
     observation = make_observation(
         my_hand=[two_spades],

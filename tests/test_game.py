@@ -1,6 +1,6 @@
 import pytest
 
-from bot import Move
+from logic import Move
 from card import Card
 from game import BigTwoGame, InvalidMoveError, Play
 
@@ -11,22 +11,22 @@ def test_game_can_be_created_with_one_to_four_human_players(human_count: int) ->
 
     assert len(game.seats) == 4
     assert sum(seat.kind == "human" for seat in game.seats) == human_count
-    assert sum(seat.kind == "bot" for seat in game.seats) == 4 - human_count
+    assert sum(seat.kind == "logic" for seat in game.seats) == 4 - human_count
     assert set(game.hands) == {seat.seat_id for seat in game.seats}
 
 
 @pytest.mark.parametrize("human_count", [1, 2, 3])
 def test_each_bot_has_a_distinct_brain_instance(human_count: int) -> None:
     game = BigTwoGame.new(human_count=human_count)
-    bot_brains = [seat.bot_brain for seat in game.seats if seat.kind == "bot"]
+    strategys = [seat.strategy for seat in game.seats if seat.kind == "logic"]
 
-    assert all(brain is not None for brain in bot_brains)
-    assert len({id(brain) for brain in bot_brains}) == len(bot_brains)
+    assert all(brain is not None for brain in strategys)
+    assert len({id(brain) for brain in strategys}) == len(strategys)
 
 
 def test_bot_observation_includes_own_hand() -> None:
     game = BigTwoGame.new(human_count=1)
-    bot_seat = next(seat for seat in game.seats if seat.kind == "bot")
+    bot_seat = next(seat for seat in game.seats if seat.kind == "logic")
 
     observation = game.create_observation(bot_seat.seat_id)
 
@@ -36,7 +36,7 @@ def test_bot_observation_includes_own_hand() -> None:
 
 def test_bot_observation_does_not_include_other_players_hands() -> None:
     game = BigTwoGame.new(human_count=1)
-    bot_seat = next(seat for seat in game.seats if seat.kind == "bot")
+    bot_seat = next(seat for seat in game.seats if seat.kind == "logic")
     other_seat_ids = {seat.seat_id for seat in game.seats if seat.seat_id != bot_seat.seat_id}
 
     observation = game.create_observation(bot_seat.seat_id)
@@ -53,7 +53,7 @@ def test_public_state_exposes_card_counts_not_private_hands() -> None:
     public_state = game.get_public_state()
 
     assert not hasattr(public_state, "hands")
-    assert all(not hasattr(seat, "bot_brain") for seat in public_state.seats)
+    assert all(not hasattr(seat, "strategy") for seat in public_state.seats)
     assert public_state.card_counts_by_seat == {
         seat.seat_id: len(game.hands[seat.seat_id]) for seat in game.seats
     }

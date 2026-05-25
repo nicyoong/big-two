@@ -1,6 +1,6 @@
-from bot import Move
+from logic import Move
 from card import Card
-from combo_preserving_bot import ComboPreservingBot
+from combo_preservation import ComboPreservation
 from game import Observation, Play
 
 
@@ -30,72 +30,72 @@ def make_observation(
 
 
 def test_combo_preserving_bot_chooses_winning_move_when_available() -> None:
-    bot = ComboPreservingBot()
+    logic = ComboPreservation()
     observation = make_observation(
         my_hand=cards("8D", "8C"),
         current_play=Play(seat_id="seat-2", cards=tuple(cards("7D", "7C"))),
     )
 
-    move = bot.choose_move(observation)
+    move = logic.choose_move(observation)
 
     assert move == Move(cards("8D", "8C"))
 
 
 def test_combo_preserving_bot_avoids_breaking_pair_if_similar_single_is_available() -> None:
-    bot = ComboPreservingBot()
+    logic = ComboPreservation()
     observation = make_observation(
         my_hand=cards("7C", "7S", "8D"),
         current_play=Play(seat_id="seat-2", cards=(Card.from_text("7D"),)),
     )
 
-    move = bot.choose_move(observation)
+    move = logic.choose_move(observation)
 
     assert move == Move(cards("8D"))
 
 
 def test_combo_preserving_bot_avoids_wasting_rank_two_when_lower_legal_move_exists() -> None:
-    bot = ComboPreservingBot()
+    logic = ComboPreservation()
     observation = make_observation(
         my_hand=cards("8D", "2D"),
         current_play=Play(seat_id="seat-2", cards=(Card.from_text("7D"),)),
     )
 
-    move = bot.choose_move(observation)
+    move = logic.choose_move(observation)
 
     assert move == Move(cards("8D"))
 
 
 def test_combo_preserving_bot_prefers_five_cards_when_starting_if_it_improves_hand_shape() -> None:
-    bot = ComboPreservingBot()
+    logic = ComboPreservation()
     observation = make_observation(
         my_hand=cards("3D", "4C", "5H", "6S", "7D", "9D"),
     )
 
-    move = bot.choose_move(observation)
+    move = logic.choose_move(observation)
 
     assert move == Move(cards("3D", "4C", "5H", "6S", "7D"))
 
 
 def test_combo_preserving_bot_is_deterministic() -> None:
-    bot = ComboPreservingBot()
+    logic = ComboPreservation()
     observation = make_observation(
         my_hand=cards("7C", "7S", "8D", "2D"),
         current_play=Play(seat_id="seat-2", cards=(Card.from_text("7D"),)),
     )
 
-    moves = [bot.choose_move(observation) for _ in range(5)]
+    moves = [logic.choose_move(observation) for _ in range(5)]
 
     assert moves == [Move(cards=cards("8D"))] * 5
 
 
 def test_evaluate_remaining_hand_empty() -> None:
-    from combo_preserving_bot import evaluate_remaining_hand
+    from combo_preservation import evaluate_remaining_hand
     obs = make_observation(my_hand=[])
     assert evaluate_remaining_hand(obs, []) == -2_000_000
 
 
 def test_evaluate_remaining_hand_clean_exit_group() -> None:
-    from combo_preserving_bot import evaluate_remaining_hand
+    from combo_preservation import evaluate_remaining_hand
     obs = make_observation(my_hand=cards("4D", "4C"))
     score_pair = evaluate_remaining_hand(obs, cards("4D", "4C"))
     
@@ -107,7 +107,7 @@ def test_evaluate_remaining_hand_clean_exit_group() -> None:
 
 
 def test_evaluate_remaining_hand_triple_vs_singles() -> None:
-    from combo_preserving_bot import evaluate_remaining_hand
+    from combo_preservation import evaluate_remaining_hand
     obs = make_observation(my_hand=cards("4D", "4C", "4H"))
     score_triple = evaluate_remaining_hand(obs, cards("4D", "4C", "4H"))
     
@@ -118,7 +118,7 @@ def test_evaluate_remaining_hand_triple_vs_singles() -> None:
 
 
 def test_evaluate_remaining_hand_five_card_vs_singles() -> None:
-    from combo_preserving_bot import evaluate_remaining_hand
+    from combo_preservation import evaluate_remaining_hand
     straight = cards("3D", "4C", "5H", "6S", "7D")
     obs = make_observation(my_hand=straight)
     score_straight = evaluate_remaining_hand(obs, straight)
@@ -131,7 +131,7 @@ def test_evaluate_remaining_hand_five_card_vs_singles() -> None:
 
 
 def test_evaluate_remaining_hand_low_orphan_penalty() -> None:
-    from combo_preserving_bot import evaluate_remaining_hand
+    from combo_preservation import evaluate_remaining_hand
     # 3D is a low orphan single
     obs = make_observation(my_hand=cards("3D"))
     score_low = evaluate_remaining_hand(obs, cards("3D"))
@@ -145,7 +145,7 @@ def test_evaluate_remaining_hand_low_orphan_penalty() -> None:
 
 
 def test_evaluate_remaining_hand_high_control_single() -> None:
-    from combo_preserving_bot import evaluate_remaining_hand
+    from combo_preservation import evaluate_remaining_hand
     # 2S is a control card
     obs = make_observation(my_hand=cards("2S"))
     score_2s = evaluate_remaining_hand(obs, cards("2S"))
@@ -158,7 +158,7 @@ def test_evaluate_remaining_hand_high_control_single() -> None:
 
 
 def test_overlapping_five_card_bonus_is_capped() -> None:
-    from combo_preserving_bot import evaluate_remaining_hand
+    from combo_preservation import evaluate_remaining_hand
     # Hand with many possible straights
     hand = cards("3D", "4D", "5D", "6D", "7D", "8D", "9D")
     obs = make_observation(my_hand=hand)

@@ -3,9 +3,9 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
-from bot import BotBrain, Move, PassMove, generate_legal_plays
+from logic import Strategy, Move, PassMove, generate_legal_plays
 from card import Card, Rank
-from combo_preserving_bot import (
+from combo_preservation import (
     _remove_cards,
     _would_break_pair,
     _would_break_triple,
@@ -16,7 +16,7 @@ from combo_preserving_bot import (
 )
 from heuristics import (
     BEST_SCORE_THRESHOLD_WORSE_HAND,
-    BotPersonality,
+    Personality,
     EXPENSIVE_MOVE_THRESHOLD,
     NEAR_WIN_REDUCTION_FACTOR,
     PENALTY_ACE,
@@ -36,8 +36,8 @@ if TYPE_CHECKING:
 
 
 @dataclass
-class ControlCardBot(BotBrain):
-    personality: BotPersonality = field(default_factory=BotPersonality.create_random)
+class ControlCardStrategy(Strategy):
+    personality: Personality = field(default_factory=Personality.create_random)
 
     def choose_move(self, observation: "Observation") -> Move | PassMove:
         legal_plays = generate_legal_plays(
@@ -76,11 +76,11 @@ def is_control_card(card: Card, observation: "Observation") -> bool:
     return False
 
 
-def control_card_penalty(move: Move, observation: "Observation", personality: BotPersonality | None = None) -> int:
+def control_card_penalty(move: Move, observation: "Observation", personality: Personality | None = None) -> int:
     if _move_wins_immediately(move, observation):
         return 0
 
-    p = personality or BotPersonality.create_default()
+    p = personality or Personality.create_default()
     penalty = 0
     # 2s are the most precious single-card controls.
     penalty += p.penalty_two * sum(1 for card in move.cards if card.rank == Rank.TWO)
@@ -121,10 +121,10 @@ def move_takes_control(move: Move, observation: "Observation") -> bool:
     )
 
 
-def should_pass(observation: "Observation", best_move: Move, best_score: int, personality: BotPersonality | None = None) -> bool:
-    p = personality or BotPersonality.create_default()
+def should_pass(observation: "Observation", best_move: Move, best_score: int, personality: Personality | None = None) -> bool:
+    p = personality or Personality.create_default()
     # Never pass if:
-    # - bot is starting a new trick
+    # - starting a new trick
     if observation.is_starting_new_trick:
         return False
     # - best_move wins immediately
@@ -136,7 +136,7 @@ def should_pass(observation: "Observation", best_move: Move, best_score: int, pe
     # - any opponent has 1 card and best_move can block safely
     if move_blocks_dangerous_player(observation, best_move):
         return False
-    # - bot has 3 or fewer cards and best_move improves exit path significantly
+    # - hand has 3 or fewer cards and best_move improves exit path significantly
     if len(observation.my_hand) <= 3 and improves_exit_path(observation, best_move):
         return False
 
@@ -150,7 +150,7 @@ def should_pass(observation: "Observation", best_move: Move, best_score: int, pe
                 if is_safe_to_pass(observation):
                     return True
 
-    # - best move uses the bot's last obvious control card
+    # - best move uses the last obvious control card
     if is_expensive_move(observation, best_move, p) and not has_likely_control_card(_remove_cards(list(observation.my_hand), best_move.cards)):
         if is_safe_to_pass(observation):
             return True
@@ -174,8 +174,8 @@ def should_pass(observation: "Observation", best_move: Move, best_score: int, pe
     return False
 
 
-def is_expensive_move(observation: "Observation", move: Move, personality: BotPersonality | None = None) -> bool:
-    p = personality or BotPersonality.create_default()
+def is_expensive_move(observation: "Observation", move: Move, personality: Personality | None = None) -> bool:
+    p = personality or Personality.create_default()
     # Expensive if:
     # - uses rank 2
     if any(card.rank == Rank.TWO for card in move.cards):
@@ -232,7 +232,7 @@ def is_safe_to_pass(observation: "Observation") -> bool:
     next_player = next_seat_id(observation, observation.my_seat_id)
     if observation.card_counts_by_seat.get(next_player, 13) == 1:
         return False
-    # - bot is not near winning
+    # - logic is not near winning
     if len(observation.my_hand) <= 3:
         return False
     return True
@@ -264,7 +264,7 @@ def _strong_five_card_penalty(move: Move) -> int:
     return 0
 
 
-def _remaining_hand_is_strong(move: Move, observation: "Observation", personality: BotPersonality | None = None) -> bool:
+def _remaining_hand_is_strong(move: Move, observation: "Observation", personality: Personality | None = None) -> bool:
     remaining = list(observation.my_hand)
     for card in move.cards:
         remaining.remove(card)
@@ -274,7 +274,7 @@ def _remaining_hand_is_strong(move: Move, observation: "Observation", personalit
     )
 
 
-def _beating_current_play_is_too_expensive(move: Move, observation: "Observation", personality: BotPersonality | None = None) -> bool:
+def _beating_current_play_is_too_expensive(move: Move, observation: "Observation", personality: Personality | None = None) -> bool:
     if observation.current_play is None:
         return False
     return control_card_penalty(move, observation, personality) >= EXPENSIVE_MOVE_THRESHOLD
