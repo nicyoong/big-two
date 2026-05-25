@@ -6,6 +6,7 @@ from itertools import combinations
 from typing import TYPE_CHECKING
 
 from card import Card
+from rules import InvalidPlayError, can_beat, classify_play
 
 if TYPE_CHECKING:
     from game import Observation, Play
@@ -65,6 +66,12 @@ def generate_legal_plays(
             continue
         for cards in combinations(sorted_hand, size):
             if must_include is not None and must_include not in cards:
+                continue
+            try:
+                classify_play(cards)
+            except InvalidPlayError:
+                continue
+            if current_play is not None and not can_beat(cards, current_play.cards):
                 continue
             legal_plays.append(cards)
     return legal_plays

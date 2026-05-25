@@ -2,7 +2,7 @@ import pytest
 
 from bot import Move
 from card import Card
-from game import BigTwoGame
+from game import BigTwoGame, InvalidMoveError, Play
 
 
 @pytest.mark.parametrize("human_count", [1, 2, 3, 4])
@@ -71,3 +71,38 @@ def test_public_history_records_plays_and_passes() -> None:
     assert game.public_history[0].seat_id == starting_seat_id
     assert game.public_history[0].cards == (Card.from_text("3D"),)
     assert game.public_history[1].seat_id == passing_seat_id
+
+
+def test_rejects_invalid_play_category() -> None:
+    game = BigTwoGame.new(human_count=4)
+    seat_id = game.current_turn_seat_id
+    game.hands[seat_id] = [Card.from_text("3D"), Card.from_text("4D")]
+
+    with pytest.raises(InvalidMoveError, match="pair"):
+        game.apply_move(seat_id, Move([Card.from_text("3D"), Card.from_text("4D")]))
+
+
+def test_rejects_play_that_does_not_beat_current_play() -> None:
+    game = BigTwoGame.new(human_count=4)
+    seat_id = game.current_turn_seat_id
+    game.current_play = Play(seat_id="seat-2", cards=(Card.from_text("7D"),))
+    game.current_trick_leader = "seat-2"
+    game.hands[seat_id] = [Card.from_text("6S")]
+
+    with pytest.raises(InvalidMoveError, match="does not beat"):
+        game.apply_move(seat_id, Move([Card.from_text("6S")]))
+
+
+def test_allows_five_card_higher_category_to_beat_current_play() -> None:
+    game = BigTwoGame.new(human_count=4)
+    seat_id = game.current_turn_seat_id
+    game.current_play = Play(
+        seat_id="seat-2",
+        cards=tuple(Card.from_text(label) for label in ["3D", "4C", "5H", "6S", "7D"]),
+    )
+    game.current_trick_leader = "seat-2"
+    game.hands[seat_id] = [Card.from_text(label) for label in ["3S", "5S", "7S", "9S", "JS"]]
+
+    event = game.apply_move(seat_id, Move([Card.from_text(label) for label in ["3S", "5S", "7S", "9S", "JS"]]))
+
+    assert event.event_type == "play"

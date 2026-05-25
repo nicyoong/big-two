@@ -53,7 +53,7 @@ def test_bot_returns_only_legal_moves() -> None:
     bot = RandomLegalBot(rng=IndexedRandom(1))
     observation = make_observation(
         my_hand=[Card.from_text("3D"), Card.from_text("4D"), Card.from_text("5D")],
-        current_play=Play(seat_id="seat-2", cards=(Card.from_text("6D"),)),
+        current_play=Play(seat_id="seat-2", cards=(Card.from_text("3C"),)),
     )
 
     move = bot.choose_move(observation)
@@ -101,7 +101,7 @@ def test_two_bot_instances_make_decisions_independently() -> None:
     second_bot = RandomLegalBot(rng=second_rng)
     observation = make_observation(
         my_hand=[Card.from_text("3D"), Card.from_text("4D"), Card.from_text("5D")],
-        current_play=Play(seat_id="seat-2", cards=(Card.from_text("6D"),)),
+        current_play=Play(seat_id="seat-2", cards=(Card.from_text("3C"),)),
     )
 
     first_move = first_bot.choose_move(observation)

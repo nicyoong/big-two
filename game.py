@@ -5,6 +5,7 @@ from typing import Literal
 
 from bot import BotBrain, Move, PassMove, RandomLegalBot
 from card import Card, create_standard_deck
+from rules import InvalidPlayError, can_beat, classify_play
 
 
 PlayerKind = Literal["human", "bot"]
@@ -238,6 +239,14 @@ class BigTwoGame:
 
         if self.current_play is not None and len(cards) != len(self.current_play.cards):
             raise InvalidMoveError("A play must match the current play's card count")
+
+        try:
+            classify_play(cards)
+        except InvalidPlayError as exc:
+            raise InvalidMoveError(str(exc)) from exc
+
+        if self.current_play is not None and not can_beat(cards, self.current_play.cards):
+            raise InvalidMoveError("Play does not beat the current play")
 
     def _require_can_act(self, seat_id: str) -> None:
         self._require_known_seat(seat_id)
