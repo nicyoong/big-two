@@ -6,7 +6,7 @@ from itertools import combinations
 from typing import TYPE_CHECKING
 
 from card import Card
-from rules import InvalidPlayError, can_beat, classify_play
+from rules import InvalidPlayError, can_beat, classify_play, play_strength
 
 if TYPE_CHECKING:
     from game import Observation, Play
@@ -47,6 +47,19 @@ class RandomLegalBot(BotBrain):
         if not legal_plays:
             return PassMove()
         return Move(cards=list(self.rng.choice(legal_plays)))
+
+
+@dataclass
+class LowestValidBot(BotBrain):
+    def choose_move(self, observation: "Observation") -> Move | PassMove:
+        legal_plays = generate_legal_plays(
+            hand=observation.my_hand,
+            current_play=observation.current_play,
+            must_include=observation.must_include_card,
+        )
+        if not legal_plays:
+            return PassMove()
+        return Move(cards=list(sorted(legal_plays, key=play_strength)[0]))
 
 
 def generate_legal_plays(

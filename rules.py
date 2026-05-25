@@ -71,6 +71,11 @@ def can_beat(candidate: tuple[Card, ...] | list[Card], current: tuple[Card, ...]
     return candidate_rank.tiebreaker > current_rank.tiebreaker
 
 
+def play_strength(cards: tuple[Card, ...] | list[Card]) -> tuple[int, tuple[int, ...]]:
+    play_rank = classify_play(cards)
+    return (int(play_rank.category), play_rank.tiebreaker)
+
+
 def _classify_five_card_play(
     cards: tuple[Card, ...],
     rank_counts: Counter[Rank],
