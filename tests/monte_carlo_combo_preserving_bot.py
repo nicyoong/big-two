@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from random_legal_bot import RandomLegalBot
 from game import BigTwoGame, PlayerSeat
 from lowest_valid_bot import LowestValidBot
+from combo_preserving_bot import ComboPreservingBot
 
 
 GAME_COUNT = 1000
@@ -17,11 +18,11 @@ LOWEST_VALID_SEAT_ID = "seat-1"
 class GameResult:
     winner: str
     turns: int
-    lowest_valid_starting_cards: int
+    test_starting_cards: int
     random_starting_cards: tuple[int, int, int]
 
 
-def test_lowest_valid_bot_against_three_random_legal_bots_monte_carlo() -> None:
+def test_combo_preserving_bot_against_three_random_legal_bots_monte_carlo() -> None:
     results = [run_game(game_number) for game_number in range(GAME_COUNT)]
     winners = Counter(result.winner for result in results)
     lowest_valid_wins = winners[LOWEST_VALID_SEAT_ID]
@@ -29,9 +30,9 @@ def test_lowest_valid_bot_against_three_random_legal_bots_monte_carlo() -> None:
     turn_counts = [result.turns for result in results]
 
     print("")
-    print("Monte Carlo: LowestValidBot vs 3 RandomLegalBot")
+    print("Monte Carlo: ComboPreservingBot vs 3 RandomLegalBot")
     print(f"Games: {GAME_COUNT}")
-    print(f"LowestValidBot wins: {lowest_valid_wins} ({lowest_valid_wins / GAME_COUNT:.1%})")
+    print(f"ComboPreservingBot wins: {lowest_valid_wins} ({lowest_valid_wins / GAME_COUNT:.1%})")
     print(f"RandomLegalBot wins: {random_wins} ({random_wins / GAME_COUNT:.1%})")
     print("Wins by seat:")
     for seat_id in ("seat-1", "seat-2", "seat-3", "seat-4"):
@@ -49,9 +50,9 @@ def run_game(game_number: int) -> GameResult:
     game.seats = [
         PlayerSeat(
             seat_id="seat-1",
-            name="LowestValidBot",
+            name="ComboPreservingBot",
             kind="bot",
-            bot_brain=LowestValidBot(),
+            bot_brain=ComboPreservingBot(),
         ),
         PlayerSeat(
             seat_id="seat-2",
@@ -95,7 +96,7 @@ def run_game(game_number: int) -> GameResult:
     return GameResult(
         winner=game.winner,
         turns=turns,
-        lowest_valid_starting_cards=starting_counts["seat-1"],
+        test_starting_cards=starting_counts["seat-1"],
         random_starting_cards=(
             starting_counts["seat-2"],
             starting_counts["seat-3"],

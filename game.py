@@ -4,7 +4,8 @@ import random
 from dataclasses import dataclass, field
 from typing import ClassVar, Literal
 
-from bot import BotBrain, Move, PassMove, RandomLegalBot
+from bot import BotBrain, Move, PassMove
+from random_legal_bot import RandomLegalBot
 from card import Card, create_standard_deck
 from rules import InvalidPlayError, can_beat, classify_play
 

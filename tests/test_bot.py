@@ -1,6 +1,7 @@
 import random
 
-from bot import Move, PassMove, RandomLegalBot, generate_legal_plays
+from bot import Move, PassMove, generate_legal_plays
+from random_legal_bot import RandomLegalBot
 from card import Card
 from game import Observation, Play
 
