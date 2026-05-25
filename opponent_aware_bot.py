@@ -21,7 +21,7 @@ from heuristics import (
     OPPONENT_1_CARD_START_MULTI_CARD_BONUS,
     OPPONENT_2_CARDS_START_WEAK_PAIR_PENALTY,
 )
-from phase_aware_bot import phase_adjustment
+from phase_aware_bot import GamePhase, get_game_phase, phase_adjustment
 from rules import PlayCategory, classify_play
 
 if TYPE_CHECKING:
@@ -53,8 +53,17 @@ class OpponentAwareBot(BotBrain):
             )
             scored_moves.append((score, cards))
 
-        _, best_cards = min(scored_moves, key=lambda scored_move: (scored_move[0], scored_move[1]))
-        return Move(cards=list(best_cards))
+        best_score, best_cards = min(scored_moves, key=lambda scored_move: (scored_move[0], scored_move[1]))
+        best_move = Move(cards=list(best_cards))
+
+        # PRODUCTION LOGIC: Integrate "Smart Pass" from supporting modules
+        # Only consider passing if we are not in the Endgame.
+        if get_game_phase(len(observation.my_hand)) != GamePhase.ENDGAME:
+            from control_card_bot import should_pass
+            if should_pass(observation, best_move, best_score, self.personality):
+                return PassMove()
+
+        return best_move
 
 
 def opponent_danger(observation: "Observation", seat_id: str) -> int:
