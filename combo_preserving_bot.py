@@ -174,12 +174,9 @@ def has_likely_control_card(hand: list[Card]) -> bool:
     if any(card.rank == Rank.TWO for card in hand):
         return True
     # Ace of Spades or Hearts
-    if any(card.rank == Rank.ACE and card.suit in (Rank.HEARTS, Rank.SPADES) for card in hand):
-        # Note: Suit enum in card.py is DIAMONDS=0, CLUBS=1, HEARTS=2, SPADES=3. 
-        # Actually I should use Suit.HEARTS, Suit.SPADES.
-        from card import Suit
-        if any(card.rank == Rank.ACE and card.suit in (Suit.HEARTS, Suit.SPADES) for card in hand):
-            return True
+    from card import Suit
+    if any(card.rank == Rank.ACE and card.suit in (Suit.HEARTS, Suit.SPADES) for card in hand):
+        return True
     # High pair (JJ or higher)
     rank_counts = _rank_counts(hand)
     if any(count >= 2 and rank >= Rank.JACK for rank, count in rank_counts.items()):
