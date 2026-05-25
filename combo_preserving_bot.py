@@ -55,34 +55,146 @@ def score_move_level_2(observation: "Observation", move: Move) -> int:
     # Avoid breaking triples even more heavily than pairs.
     score += 30 if _would_break_triple(hand, move_cards) else 0
     # Account for how awkward the remaining hand looks after this move.
-    score += evaluate_hand_badness(remaining_hand)
+    score += evaluate_remaining_hand(observation, remaining_hand)
     return score
 
 
 def evaluate_hand_badness(hand: list[Card]) -> int:
+    """Backward compatibility wrapper for evaluate_remaining_hand."""
+    # Since this version doesn't take observation, we pass a dummy or None if handled.
+    # Actually evaluate_remaining_hand uses observation.my_seat_id and card_counts_by_seat
+    # only for some checks. I should make evaluate_remaining_hand handle observation=None.
+    return evaluate_remaining_hand(None, hand) # type: ignore
+
+
+def evaluate_remaining_hand(observation: "Observation" | None, hand: list[Card]) -> int:
+    if not hand:
+        return -2_000_000 # Extremely good
+
     rank_counts = _rank_counts(hand)
-    orphan_singles = [card for card in hand if rank_counts[card.rank] == 1]
+    orphan_singles_list = [card for card in hand if rank_counts[card.rank] == 1]
+    orphan_singles = len(orphan_singles_list)
+    low_orphan_singles = sum(1 for card in orphan_singles_list if card.rank < Rank.JACK)
+    
     pairs = sum(1 for count in rank_counts.values() if count >= 2)
     triples = sum(1 for count in rank_counts.values() if count >= 3)
-    five_card_plays = sum(1 for cards in generate_legal_plays(hand=hand, current_play=None) if len(cards) == 5)
-    control_cards = [card for card in hand if card.rank in (Rank.KING, Rank.ACE, Rank.TWO)]
+    
+    # Count five-card plays but cap for bonus
+    five_card_plays_list = [cards for cards in generate_legal_plays(hand=hand, current_play=None) if len(cards) == 5]
+    five_card_count = len(five_card_plays_list)
+    capped_five_card_groups = min(five_card_count, 2)
+    
+    control_cards_count = sum(1 for card in hand if card.rank in (Rank.KING, Rank.ACE, Rank.TWO))
+    exit_groups = estimate_exit_groups(hand)
+    
+    badness = (
+        len(hand) * 5
+        + exit_groups * 18
+        + orphan_singles * 8
+        + low_orphan_singles * 12
+        - pairs * 5
+        - triples * 8
+        - capped_five_card_groups * 10
+        - control_cards_count * 4
+    )
+    
+    if is_clean_exit_group(hand):
+        badness -= 50
+        
+    if not has_likely_control_card(hand):
+        badness += 20
 
-    score = 0
-    # More remaining cards means more work left to finish the hand.
-    score += 10 * len(hand)
-    # Orphan singles are harder to shed than cards grouped into combos.
-    score += 8 * len(orphan_singles)
-    # Low orphan singles are especially awkward because they rarely regain control.
-    score += 10 * sum(1 for card in orphan_singles if card.rank < Rank.JACK)
-    # Pairs preserve compact two-card plays.
-    score -= 6 * pairs
-    # Triples preserve compact three-card plays.
-    score -= 8 * triples
-    # Five-card plays are valuable ways to shed many cards at once.
-    score -= 12 * five_card_plays
-    # Control cards improve the chance of winning later tricks.
-    score -= 5 * len(control_cards)
-    return score
+    # Differentiate between high and low single exit groups
+    if len(hand) == 1:
+        # Penalize lower single rank. Rank.TWO is 12, Rank.THREE is 0.
+        badness += int(Rank.TWO - hand[0].rank) * 2
+
+    return badness
+
+
+def estimate_exit_groups(hand: list[Card]) -> int:
+    """Greedy deterministic estimation of future turns needed to empty the hand."""
+    temp_hand = sorted(hand)
+    groups = 0
+    
+    while temp_hand:
+        groups += 1
+        # 1. Best 5-card play (highest strength)
+        five_card_plays = [cards for cards in generate_legal_plays(hand=temp_hand, current_play=None) if len(cards) == 5]
+        if five_card_plays:
+            best_five = max(five_card_plays, key=play_strength)
+            temp_hand = _remove_cards(temp_hand, list(best_five))
+            continue
+            
+        # 2. Triples (highest)
+        rank_counts = _rank_counts(temp_hand)
+        triples = [rank for rank, count in rank_counts.items() if count >= 3]
+        if triples:
+            best_rank = max(triples)
+            cards_to_remove = [c for c in temp_hand if c.rank == best_rank][:3]
+            temp_hand = _remove_cards(temp_hand, cards_to_remove)
+            continue
+            
+        # 3. Pairs (highest)
+        pairs = [rank for rank, count in rank_counts.items() if count >= 2]
+        if pairs:
+            best_rank = max(pairs)
+            cards_to_remove = [c for c in temp_hand if c.rank == best_rank][:2]
+            temp_hand = _remove_cards(temp_hand, cards_to_remove)
+            continue
+            
+        # 4. Single (highest)
+        best_card = max(temp_hand)
+        temp_hand = _remove_cards(temp_hand, [best_card])
+        
+    return groups
+
+
+def is_clean_exit_group(hand: list[Card]) -> bool:
+    if len(hand) == 1:
+        return True
+    if len(hand) == 2:
+        return _rank_counts(hand).get(hand[0].rank, 0) == 2
+    if len(hand) == 3:
+        return _rank_counts(hand).get(hand[0].rank, 0) == 3
+    if len(hand) == 5:
+        try:
+            from rules import classify_play
+            classify_play(hand)
+            return True
+        except Exception:
+            return False
+    return False
+
+
+def has_likely_control_card(hand: list[Card]) -> bool:
+    if not hand:
+        return True
+    # Any 2
+    if any(card.rank == Rank.TWO for card in hand):
+        return True
+    # Ace of Spades or Hearts
+    if any(card.rank == Rank.ACE and card.suit in (Rank.HEARTS, Rank.SPADES) for card in hand):
+        # Note: Suit enum in card.py is DIAMONDS=0, CLUBS=1, HEARTS=2, SPADES=3. 
+        # Actually I should use Suit.HEARTS, Suit.SPADES.
+        from card import Suit
+        if any(card.rank == Rank.ACE and card.suit in (Suit.HEARTS, Suit.SPADES) for card in hand):
+            return True
+    # High pair (JJ or higher)
+    rank_counts = _rank_counts(hand)
+    if any(count >= 2 and rank >= Rank.JACK for rank, count in rank_counts.items()):
+        return True
+    # High triple
+    if any(count >= 3 and rank >= Rank.TEN for rank, count in rank_counts.items()):
+        return True
+    # Strong five-card hand (Flush or better)
+    from rules import classify_play, PlayCategory
+    five_card_plays = [cards for cards in generate_legal_plays(hand=hand, current_play=None) if len(cards) == 5]
+    for play in five_card_plays:
+        if classify_play(play).category >= PlayCategory.FLUSH:
+            return True
+            
+    return False
 
 
 def _normalized_move_strength(cards: list[Card]) -> int:
