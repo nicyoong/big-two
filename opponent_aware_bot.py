@@ -77,7 +77,10 @@ def next_seat_id(observation: "Observation", seat_id: str) -> str:
 
 
 def next_player_is_dangerous(observation: "Observation") -> bool:
-    return opponent_danger(observation, next_seat_id(observation, observation.my_seat_id)) > 0
+    # prompt says "if the next player has 1 card, be extra careful" 
+    # and "next_player_is_dangerous(observation) -> bool" 
+    # I'll implement it as "has 1 card" based on the strategic behavior rule.
+    return observation.card_counts_by_seat.get(next_seat_id(observation, observation.my_seat_id)) == 1
 
 
 def opponent_adjustment(observation: "Observation", move: Move, remaining_hand: list[Card]) -> int:
@@ -87,22 +90,30 @@ def opponent_adjustment(observation: "Observation", move: Move, remaining_hand: 
     is_low_single = is_single and move.cards[0].rank < Rank.JACK
     is_multi_card = len(move.cards) in (2, 3, 5)
 
+    # - If any opponent has 1 card, avoid starting a trick with a low single.
+    # - If any opponent has 1 card, prefer pair/triple/five-card plays when starting.
     if observation.is_starting_new_trick and any_opponent_has_one_card(observation):
         if is_low_single:
             score += 80
         if is_multi_card:
             score -= 25
 
+    # - If the next player has 1 card, be extra careful with singles.
     if next_player_is_dangerous(observation) and is_low_single:
         score += 100
 
+    # - If an opponent has 2 cards, be cautious about starting weak pairs.
     if any(_opponent_card_count(observation, seat_id) == 2 for seat_id in observation.seat_order):
         if observation.is_starting_new_trick and _is_weak_pair(move):
-            score += 120
+            score += 35
 
+    # - If forced to play a single while an opponent has 1 card, prefer higher singles.
     if any_opponent_has_one_card(observation) and is_single:
-        score += max(0, int(Rank.TWO - move.cards[0].rank) * 4)
+        # Penalize lower singles more than higher ones.
+        # Rank.TWO is highest, Rank.THREE is lowest.
+        score += int(Rank.TWO - move.cards[0].rank) * 2
 
+    # - If a dangerous opponent recently passed on a play size or kind, slightly prefer that kind when starting.
     for seat_id in dangerous_opponents(observation):
         if recently_passed_on_size(observation, seat_id, len(move.cards)):
             score -= 15
