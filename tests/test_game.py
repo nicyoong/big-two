@@ -157,3 +157,19 @@ def test_rejects_ending_on_2_spades() -> None:
     
     with pytest.raises(InvalidMoveError, match="Cannot end the game on the 2 of Spades"):
         game.apply_move(seat_id, Move([two_spades]))
+
+
+def test_allows_pass_on_new_trick_if_no_legal_plays() -> None:
+    game = BigTwoGame.new(human_count=4)
+    seat_id = game.current_turn_seat_id
+    two_spades = Card.from_text("2S")
+    
+    # Force hand to be just 2S and it's a new trick
+    game.hands[seat_id] = [two_spades]
+    game.current_play = None
+    
+    # Player should be allowed to pass because they cannot play 2S as their last card
+    event = game.pass_turn(seat_id)
+    
+    assert event.event_type == "pass"
+    assert game.current_turn_seat_id != seat_id

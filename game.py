@@ -241,9 +241,12 @@ class BigTwoGame:
     def pass_turn(self, seat_id: str) -> PublicEvent:
         self._require_can_act(seat_id)
         if self.current_play is None:
-            raise InvalidMoveError("Cannot pass when starting a new trick")
-        if seat_id == self.current_trick_leader:
-            raise InvalidMoveError("Trick leader cannot pass against their own play")
+            # Check if player actually has ANY legal plays. 
+            # If they don't (e.g. only have 2S and it's their last card), allow passing.
+            from bot import generate_legal_plays
+            legal = generate_legal_plays(self.hands[seat_id], self.current_play, self._must_include_card())
+            if legal:
+                raise InvalidMoveError("Cannot pass when starting a new trick")
 
         self.passed_seat_ids.add(seat_id)
         self.turn_number += 1
