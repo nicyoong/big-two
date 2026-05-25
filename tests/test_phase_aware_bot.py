@@ -52,8 +52,9 @@ def test_opening_bot_prefers_weak_five_card_hand_over_low_single_when_starting()
 
 def test_opening_bot_avoids_using_two() -> None:
     bot = PhaseAwareBot()
+    # 8D, 2D, 3C, 4C, 5C, 6C, 9D, 10D, JH (JH instead of JD to avoid flush)
     observation = make_observation(
-        my_hand=cards("8D", "2D", "3C", "4C", "5C", "6C", "9D", "10D", "JD"),
+        my_hand=cards("8D", "2D", "3C", "4C", "5C", "6C", "9D", "10D", "JH"),
         current_play=Play(seat_id="seat-2", cards=(Card.from_text("7D"),)),
     )
 

@@ -5,7 +5,15 @@ from typing import TYPE_CHECKING
 
 from bot import BotBrain, Move, PassMove, generate_legal_plays
 from card import Card, Rank
-from combo_preserving_bot import evaluate_hand_badness, score_move_level_2
+from combo_preserving_bot import (
+    _remove_cards,
+    _would_break_pair,
+    _would_break_triple,
+    estimate_exit_groups,
+    evaluate_remaining_hand,
+    has_likely_control_card,
+    score_move_level_2,
+)
 from rules import PlayCategory, classify_play
 
 if TYPE_CHECKING:
@@ -23,17 +31,15 @@ class ControlCardBot(BotBrain):
         if not legal_plays:
             return PassMove()
 
-        scored_moves = [
-            (
-                score_move_level_2(observation, Move(cards=list(cards)))
-                + control_card_penalty(Move(cards=list(cards)), observation),
-                cards,
-            )
-            for cards in legal_plays
-        ]
-        _, best_cards = min(scored_moves, key=lambda scored_move: (scored_move[0], scored_move[1]))
+        scored_moves = []
+        for cards in legal_plays:
+            move = Move(cards=list(cards))
+            score = score_move_level_2(observation, move) + control_card_penalty(move, observation)
+            scored_moves.append((score, cards))
+
+        best_score, best_cards = min(scored_moves, key=lambda scored_move: (scored_move[0], scored_move[1]))
         best_move = Move(cards=list(best_cards))
-        if should_pass(observation, best_move):
+        if should_pass(observation, best_move, best_score):
             return PassMove()
         return best_move
 
@@ -97,23 +103,120 @@ def move_takes_control(move: Move, observation: "Observation") -> bool:
     )
 
 
-def should_pass(observation: "Observation", best_move: Move) -> bool:
+def should_pass(observation: "Observation", best_move: Move, best_score: int) -> bool:
+    # Never pass if:
+    # - bot is starting a new trick
     if observation.is_starting_new_trick:
         return False
+    # - best_move wins immediately
     if _move_wins_immediately(best_move, observation):
         return False
-    if any(
-        seat_id != observation.my_seat_id and count == 1
-        for seat_id, count in observation.card_counts_by_seat.items()
-    ):
+    # - current play was made by a dangerous opponent with 1 or 2 cards
+    if is_current_leader_dangerous(observation):
+        return False
+    # - any opponent has 1 card and best_move can block safely
+    if move_blocks_dangerous_player(observation, best_move):
+        return False
+    # - bot has 3 or fewer cards and best_move improves exit path significantly
+    if len(observation.my_hand) <= 3 and improves_exit_path(observation, best_move):
         return False
 
-    penalty = control_card_penalty(best_move, observation)
-    if penalty >= 60 and not player_is_near_win(observation):
+    # Usually pass if:
+    # - best move uses a 2 just to beat a high single
+    is_single = len(best_move.cards) == 1
+    if is_single and any(card.rank == Rank.TWO for card in best_move.cards):
+        if observation.current_play and len(observation.current_play.cards) == 1:
+            current_card = observation.current_play.cards[0]
+            if current_card.rank >= Rank.JACK: # Wasting 2 on J, Q, K, A
+                if is_safe_to_pass(observation):
+                    return True
+
+    # - best move uses the bot's last obvious control card
+    if is_expensive_move(observation, best_move) and not has_likely_control_card(_remove_cards(list(observation.my_hand), best_move.cards)):
+        if is_safe_to_pass(observation):
+            return True
+
+    # - best move breaks a strong combo
+    if _would_break_triple(list(observation.my_hand), best_move.cards) and is_safe_to_pass(observation):
         return True
-    if _beating_current_play_is_too_expensive(best_move, observation):
+
+    # - best move leaves a much worse remaining hand
+    remaining_hand = _remove_cards(list(observation.my_hand), best_move.cards)
+    # Use 50 as a threshold for "much worse"
+    if evaluate_remaining_hand(observation, remaining_hand) > evaluate_remaining_hand(observation, list(observation.my_hand)) + 50:
+        if is_safe_to_pass(observation):
+            return True
+
+    # - current trick is not urgent
+    # - current play was not made by a dangerous opponent
+    if not is_urgent_situation(observation) and is_expensive_move(observation, best_move):
+        if is_safe_to_pass(observation):
+            return True
+
+    return False
+
+
+def is_expensive_move(observation: "Observation", move: Move) -> bool:
+    # Expensive if:
+    # - uses rank 2
+    if any(card.rank == Rank.TWO for card in move.cards):
+        return True
+    # - uses high Ace
+    from card import Suit
+    if any(card.rank == Rank.ACE and card.suit in (Suit.HEARTS, Suit.SPADES) for card in move.cards):
+        return True
+    # - breaks triple
+    if _would_break_triple(list(observation.my_hand), move.cards):
+        return True
+    # - breaks useful five-card hand
+    hand = list(observation.my_hand)
+    remaining = _remove_cards(hand, move.cards)
+    if len([p for p in generate_legal_plays(hand=hand, current_play=None) if len(p) == 5]) > \
+       len([p for p in generate_legal_plays(hand=remaining, current_play=None) if len(p) == 5]):
+        return True
+    # - uses last likely control card
+    if has_likely_control_card(hand) and not has_likely_control_card(remaining):
         return True
     return False
+
+
+def is_current_leader_dangerous(observation: "Observation") -> bool:
+    if observation.current_trick_leader is None:
+        return False
+    count = observation.card_counts_by_seat.get(observation.current_trick_leader, 13)
+    return count <= 2
+
+
+def move_blocks_dangerous_player(observation: "Observation", move: Move) -> bool:
+    # True if:
+    # - current leader is dangerous and move beats them
+    if is_current_leader_dangerous(observation):
+        return True
+    # - or opponent has 1 card and move avoids giving an easy single
+    if any(seat_id != observation.my_seat_id and count == 1 for seat_id, count in observation.card_counts_by_seat.items()):
+        return True
+    return False
+
+
+def improves_exit_path(observation: "Observation", move: Move) -> bool:
+    hand = list(observation.my_hand)
+    remaining = _remove_cards(hand, move.cards)
+    return estimate_exit_groups(remaining) < estimate_exit_groups(hand)
+
+
+def is_safe_to_pass(observation: "Observation") -> bool:
+    # - current leader is not dangerous
+    if is_current_leader_dangerous(observation):
+        return False
+    # - next player is not down to 1 card
+    from opponent_aware_bot import next_seat_id
+    next_player = next_seat_id(observation, observation.my_seat_id)
+    if observation.card_counts_by_seat.get(next_player, 13) == 1:
+        return False
+    # - bot is not near winning
+    if len(observation.my_hand) <= 3:
+        return False
+    return True
 
 
 def _move_wins_immediately(move: Move, observation: "Observation") -> bool:
@@ -146,7 +249,8 @@ def _remaining_hand_is_strong(move: Move, observation: "Observation") -> bool:
     remaining = list(observation.my_hand)
     for card in move.cards:
         remaining.remove(card)
-    return evaluate_hand_badness(remaining) <= 25 or any(
+    # Using evaluate_remaining_hand instead of old evaluate_hand_badness
+    return evaluate_remaining_hand(observation, remaining) <= 25 or any(
         is_control_card(card, observation) for card in remaining
     )
 

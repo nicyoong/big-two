@@ -86,3 +86,56 @@ def test_bot_does_not_pass_when_starting_new_trick() -> None:
     move = bot.choose_move(observation)
 
     assert not isinstance(move, PassMove)
+
+
+def test_bot_does_not_pass_if_current_leader_is_dangerous() -> None:
+    bot = ControlCardBot()
+    # Leader has 2 cards, we can beat them with 2D. We SHOULD NOT pass.
+    observation = make_observation(
+        my_hand=cards("2D", "4D", "5D"),
+        current_play=Play(seat_id="seat-2", cards=(Card.from_text("AH"),)),
+        card_counts_by_seat={"seat-1": 3, "seat-2": 2, "seat-3": 8, "seat-4": 8},
+    )
+
+    move = bot.choose_move(observation)
+    assert move == Move(cards("2D"))
+
+
+def test_bot_does_not_pass_if_any_opponent_has_one_card_blocking() -> None:
+    bot = ControlCardBot()
+    # Seat 3 has 1 card. We should take control to block them.
+    observation = make_observation(
+        my_hand=cards("2D", "4D", "5D"),
+        current_play=Play(seat_id="seat-2", cards=(Card.from_text("AH"),)),
+        card_counts_by_seat={"seat-1": 3, "seat-2": 5, "seat-3": 1, "seat-4": 8},
+    )
+
+    move = bot.choose_move(observation)
+    assert move == Move(cards("2D"))
+
+
+def test_bot_may_pass_if_move_breaks_triple_and_situation_is_safe() -> None:
+    bot = ControlCardBot()
+    # We have a triple of 8s. To beat 7H, we'd have to use one 8, breaking the triple.
+    # Situation is safe (all opponents have many cards).
+    observation = make_observation(
+        my_hand=cards("8D", "8C", "8H", "JD"),
+        current_play=Play(seat_id="seat-2", cards=(Card.from_text("7H"),)),
+        card_counts_by_seat={"seat-1": 4, "seat-2": 8, "seat-3": 8, "seat-4": 8},
+    )
+
+    move = bot.choose_move(observation)
+    # It should prefer to pass rather than break the triple of 8s (if JD doesn't beat 7H)
+    # Wait, JD beats 7H. Let's make it so only 8 beats 7H.
+    # 7H is Rank 4. 8 is Rank 5. 
+    # Let's use current_play = 9H (Rank 6). 
+    # Then only JD (Rank 8) or 8s (Rank 5) - wait, 8s don't beat 9H.
+    
+    observation = make_observation(
+        my_hand=cards("8D", "8C", "8H", "4D"),
+        current_play=Play(seat_id="seat-2", cards=(Card.from_text("7H"),)), # Rank 4
+        card_counts_by_seat={"seat-1": 4, "seat-2": 8, "seat-3": 8, "seat-4": 8},
+    )
+    # Legal plays: 8D, 8C, 8H. All break the triple.
+    move = bot.choose_move(observation)
+    assert isinstance(move, PassMove)

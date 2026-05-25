@@ -42,9 +42,9 @@ class PhaseAwareBot(BotBrain):
             )
             scored_moves.append((score, cards))
 
-        _, best_cards = min(scored_moves, key=lambda scored_move: (scored_move[0], scored_move[1]))
+        best_score, best_cards = min(scored_moves, key=lambda scored_move: (scored_move[0], scored_move[1]))
         best_move = Move(cards=list(best_cards))
-        if _phase_should_pass(observation, best_move):
+        if _phase_should_pass(observation, best_move, best_score):
             return PassMove()
         return best_move
 
@@ -119,10 +119,10 @@ def _phase_control_penalty(observation: "Observation", move: Move) -> int:
     return penalty // 5
 
 
-def _phase_should_pass(observation: "Observation", move: Move) -> bool:
+def _phase_should_pass(observation: "Observation", move: Move, score: int) -> bool:
     if get_game_phase(len(observation.my_hand)) == GamePhase.ENDGAME:
         return False
-    return should_pass(observation, move)
+    return should_pass(observation, move, score)
 
 
 def _is_weak_five_card_play(move: Move) -> bool:
