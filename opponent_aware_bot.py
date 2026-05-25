@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from bot import BotBrain, Move, PassMove, generate_legal_plays
@@ -9,6 +9,7 @@ from combo_preserving_bot import _remove_cards, score_move_level_2
 from control_card_bot import control_card_penalty
 from game import recently_passed_on_kind, recently_passed_on_size
 from heuristics import (
+    BotPersonality,
     DANGER_LEVEL_1_CARD,
     DANGER_LEVEL_2_CARDS,
     DANGER_LEVEL_3_4_CARDS,
@@ -29,6 +30,8 @@ if TYPE_CHECKING:
 
 @dataclass
 class OpponentAwareBot(BotBrain):
+    personality: BotPersonality = field(default_factory=BotPersonality.create_random)
+
     def choose_move(self, observation: "Observation") -> Move | PassMove:
         legal_plays = generate_legal_plays(
             hand=observation.my_hand,
@@ -44,8 +47,8 @@ class OpponentAwareBot(BotBrain):
             remaining_hand = _remove_cards(list(observation.my_hand), move.cards)
             score = (
                 score_move_level_2(observation, move)
-                + control_card_penalty(move, observation)
-                + phase_adjustment(observation, move, remaining_hand)
+                + control_card_penalty(move, observation, self.personality)
+                + phase_adjustment(observation, move, remaining_hand, self.personality)
                 + opponent_adjustment(observation, move, remaining_hand)
             )
             scored_moves.append((score, cards))

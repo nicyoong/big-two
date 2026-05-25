@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from bot import BotBrain, Move, PassMove, generate_legal_plays
@@ -16,6 +16,7 @@ from combo_preserving_bot import (
 )
 from heuristics import (
     BEST_SCORE_THRESHOLD_WORSE_HAND,
+    BotPersonality,
     EXPENSIVE_MOVE_THRESHOLD,
     NEAR_WIN_REDUCTION_FACTOR,
     PENALTY_ACE,
@@ -36,6 +37,8 @@ if TYPE_CHECKING:
 
 @dataclass
 class ControlCardBot(BotBrain):
+    personality: BotPersonality = field(default_factory=BotPersonality.create_random)
+
     def choose_move(self, observation: "Observation") -> Move | PassMove:
         legal_plays = generate_legal_plays(
             hand=observation.my_hand,
@@ -48,12 +51,12 @@ class ControlCardBot(BotBrain):
         scored_moves = []
         for cards in legal_plays:
             move = Move(cards=list(cards))
-            score = score_move_level_2(observation, move) + control_card_penalty(move, observation)
+            score = score_move_level_2(observation, move) + control_card_penalty(move, observation, self.personality)
             scored_moves.append((score, cards))
 
         best_score, best_cards = min(scored_moves, key=lambda scored_move: (scored_move[0], scored_move[1]))
         best_move = Move(cards=list(best_cards))
-        if should_pass(observation, best_move, best_score):
+        if should_pass(observation, best_move, best_score, self.personality):
             return PassMove()
         return best_move
 
@@ -73,15 +76,16 @@ def is_control_card(card: Card, observation: "Observation") -> bool:
     return False
 
 
-def control_card_penalty(move: Move, observation: "Observation") -> int:
+def control_card_penalty(move: Move, observation: "Observation", personality: BotPersonality | None = None) -> int:
     if _move_wins_immediately(move, observation):
         return 0
 
+    p = personality or BotPersonality.create_default()
     penalty = 0
     # 2s are the most precious single-card controls.
-    penalty += PENALTY_TWO * sum(1 for card in move.cards if card.rank == Rank.TWO)
+    penalty += p.penalty_two * sum(1 for card in move.cards if card.rank == Rank.TWO)
     # Aces are strong controls, but less absolute than 2s.
-    penalty += PENALTY_ACE * sum(1 for card in move.cards if card.rank == Rank.ACE)
+    penalty += p.penalty_ace * sum(1 for card in move.cards if card.rank == Rank.ACE)
     # Kings are useful late controls in some visible-card states.
     penalty += PENALTY_KING * sum(1 for card in move.cards if card.rank == Rank.KING)
     # High pairs and triples can take important multi-card tricks.
@@ -94,7 +98,7 @@ def control_card_penalty(move: Move, observation: "Observation") -> int:
     elif player_is_near_win(observation):
         penalty //= NEAR_WIN_REDUCTION_FACTOR
 
-    if move_takes_control(move, observation) and _remaining_hand_is_strong(move, observation):
+    if move_takes_control(move, observation) and _remaining_hand_is_strong(move, observation, p):
         penalty //= 2
 
     return penalty
@@ -117,7 +121,8 @@ def move_takes_control(move: Move, observation: "Observation") -> bool:
     )
 
 
-def should_pass(observation: "Observation", best_move: Move, best_score: int) -> bool:
+def should_pass(observation: "Observation", best_move: Move, best_score: int, personality: BotPersonality | None = None) -> bool:
+    p = personality or BotPersonality.create_default()
     # Never pass if:
     # - bot is starting a new trick
     if observation.is_starting_new_trick:
@@ -146,7 +151,7 @@ def should_pass(observation: "Observation", best_move: Move, best_score: int) ->
                     return True
 
     # - best move uses the bot's last obvious control card
-    if is_expensive_move(observation, best_move) and not has_likely_control_card(_remove_cards(list(observation.my_hand), best_move.cards)):
+    if is_expensive_move(observation, best_move, p) and not has_likely_control_card(_remove_cards(list(observation.my_hand), best_move.cards)):
         if is_safe_to_pass(observation):
             return True
 
@@ -156,20 +161,21 @@ def should_pass(observation: "Observation", best_move: Move, best_score: int) ->
 
     # - best move leaves a much worse remaining hand
     remaining_hand = _remove_cards(list(observation.my_hand), best_move.cards)
-    if evaluate_remaining_hand(observation, remaining_hand) > evaluate_remaining_hand(observation, list(observation.my_hand)) + BEST_SCORE_THRESHOLD_WORSE_HAND:
+    if evaluate_remaining_hand(observation, remaining_hand) > evaluate_remaining_hand(observation, list(observation.my_hand)) + p.best_score_threshold_worse_hand:
         if is_safe_to_pass(observation):
             return True
 
     # - current trick is not urgent
     # - current play was not made by a dangerous opponent
-    if not is_urgent_situation(observation) and is_expensive_move(observation, best_move):
+    if not is_urgent_situation(observation) and is_expensive_move(observation, best_move, p):
         if is_safe_to_pass(observation):
             return True
 
     return False
 
 
-def is_expensive_move(observation: "Observation", move: Move) -> bool:
+def is_expensive_move(observation: "Observation", move: Move, personality: BotPersonality | None = None) -> bool:
+    p = personality or BotPersonality.create_default()
     # Expensive if:
     # - uses rank 2
     if any(card.rank == Rank.TWO for card in move.cards):
@@ -258,7 +264,7 @@ def _strong_five_card_penalty(move: Move) -> int:
     return 0
 
 
-def _remaining_hand_is_strong(move: Move, observation: "Observation") -> bool:
+def _remaining_hand_is_strong(move: Move, observation: "Observation", personality: BotPersonality | None = None) -> bool:
     remaining = list(observation.my_hand)
     for card in move.cards:
         remaining.remove(card)
@@ -268,10 +274,10 @@ def _remaining_hand_is_strong(move: Move, observation: "Observation") -> bool:
     )
 
 
-def _beating_current_play_is_too_expensive(move: Move, observation: "Observation") -> bool:
+def _beating_current_play_is_too_expensive(move: Move, observation: "Observation", personality: BotPersonality | None = None) -> bool:
     if observation.current_play is None:
         return False
-    return control_card_penalty(move, observation) >= EXPENSIVE_MOVE_THRESHOLD
+    return control_card_penalty(move, observation, personality) >= EXPENSIVE_MOVE_THRESHOLD
 
 
 def _is_played_event(event: object) -> bool:
