@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import random
 from dataclasses import dataclass, field
 from typing import Literal
 
@@ -112,7 +113,13 @@ class BigTwoGame:
     public_history: list[PublicEvent] = field(default_factory=list)
 
     @classmethod
-    def new(cls, human_count: int, human_names: list[str] | None = None) -> "BigTwoGame":
+    def new(
+        cls,
+        human_count: int,
+        human_names: list[str] | None = None,
+        seed: int | str | bytes | bytearray | None = None,
+        rng: random.Random | None = None,
+    ) -> "BigTwoGame":
         if human_count < 1 or human_count > 4:
             raise InvalidPlayerCountError("human_count must be between 1 and 4")
 
@@ -134,7 +141,7 @@ class BigTwoGame:
                     )
                 )
 
-        hands = _deal_hands(seats)
+        hands = _deal_hands(seats, rng if rng is not None else random.Random(seed))
         starting_seat_id = _find_card_holder(hands, Card.from_text("3D"))
         return cls(seats=seats, hands=hands, current_turn_seat_id=starting_seat_id)
 
@@ -286,10 +293,14 @@ class BigTwoGame:
         raise InvalidMoveError("No unpassed seat is available")
 
 
-def _deal_hands(seats: list[PlayerSeat]) -> dict[str, list[Card]]:
+def _deal_hands(seats: list[PlayerSeat], rng: random.Random) -> dict[str, list[Card]]:
+    deck = list(create_standard_deck())
+    rng.shuffle(deck)
     hands = {seat.seat_id: [] for seat in seats}
-    for index, card in enumerate(create_standard_deck()):
+    for index, card in enumerate(deck):
         hands[seats[index % len(seats)].seat_id].append(card)
+    for hand in hands.values():
+        hand.sort()
     return hands
 
 

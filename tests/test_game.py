@@ -7,7 +7,7 @@ from game import BigTwoGame, InvalidMoveError, Play
 
 @pytest.mark.parametrize("human_count", [1, 2, 3, 4])
 def test_game_can_be_created_with_one_to_four_human_players(human_count: int) -> None:
-    game = BigTwoGame.new(human_count=human_count)
+    game = BigTwoGame.new(human_count=human_count, seed=1)
 
     assert len(game.seats) == 4
     assert sum(seat.kind == "human" for seat in game.seats) == human_count
@@ -106,3 +106,30 @@ def test_allows_five_card_higher_category_to_beat_current_play() -> None:
     event = game.apply_move(seat_id, Move([Card.from_text(label) for label in ["3S", "5S", "7S", "9S", "JS"]]))
 
     assert event.event_type == "play"
+
+
+def test_deal_is_shuffled_before_round_robin_distribution() -> None:
+    game = BigTwoGame.new(human_count=4, seed=1)
+
+    assert game.hands["seat-1"] != [Card.from_text(label) for label in [
+        "3D",
+        "4D",
+        "5D",
+        "6D",
+        "7D",
+        "8D",
+        "9D",
+        "10D",
+        "JD",
+        "QD",
+        "KD",
+        "AD",
+        "2D",
+    ]]
+
+
+def test_seeded_deals_are_reproducible() -> None:
+    first_game = BigTwoGame.new(human_count=4, seed=42)
+    second_game = BigTwoGame.new(human_count=4, seed=42)
+
+    assert first_game.hands == second_game.hands
