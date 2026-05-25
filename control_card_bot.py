@@ -14,6 +14,20 @@ from combo_preserving_bot import (
     has_likely_control_card,
     score_move_level_2,
 )
+from heuristics import (
+    BEST_SCORE_THRESHOLD_WORSE_HAND,
+    EXPENSIVE_MOVE_THRESHOLD,
+    NEAR_WIN_REDUCTION_FACTOR,
+    PENALTY_ACE,
+    PENALTY_HIGH_FULL_HOUSE,
+    PENALTY_HIGH_PAIR,
+    PENALTY_HIGH_TRIPLE,
+    PENALTY_KING,
+    PENALTY_POWER_FIVE,
+    PENALTY_TWO,
+    STRONG_REMAINING_HAND_THRESHOLD,
+    URGENT_REDUCTION_FACTOR,
+)
 from rules import PlayCategory, classify_play
 
 if TYPE_CHECKING:
@@ -65,20 +79,20 @@ def control_card_penalty(move: Move, observation: "Observation") -> int:
 
     penalty = 0
     # 2s are the most precious single-card controls.
-    penalty += 80 * sum(1 for card in move.cards if card.rank == Rank.TWO)
+    penalty += PENALTY_TWO * sum(1 for card in move.cards if card.rank == Rank.TWO)
     # Aces are strong controls, but less absolute than 2s.
-    penalty += 35 * sum(1 for card in move.cards if card.rank == Rank.ACE)
+    penalty += PENALTY_ACE * sum(1 for card in move.cards if card.rank == Rank.ACE)
     # Kings are useful late controls in some visible-card states.
-    penalty += 15 * sum(1 for card in move.cards if card.rank == Rank.KING)
+    penalty += PENALTY_KING * sum(1 for card in move.cards if card.rank == Rank.KING)
     # High pairs and triples can take important multi-card tricks.
     penalty += _high_group_penalty(move)
     # Very strong five-card hands should not be spent casually.
     penalty += _strong_five_card_penalty(move)
 
     if is_urgent_situation(observation):
-        penalty //= 4
+        penalty //= URGENT_REDUCTION_FACTOR
     elif player_is_near_win(observation):
-        penalty //= 2
+        penalty //= NEAR_WIN_REDUCTION_FACTOR
 
     if move_takes_control(move, observation) and _remaining_hand_is_strong(move, observation):
         penalty //= 2
@@ -142,8 +156,7 @@ def should_pass(observation: "Observation", best_move: Move, best_score: int) ->
 
     # - best move leaves a much worse remaining hand
     remaining_hand = _remove_cards(list(observation.my_hand), best_move.cards)
-    # Use 50 as a threshold for "much worse"
-    if evaluate_remaining_hand(observation, remaining_hand) > evaluate_remaining_hand(observation, list(observation.my_hand)) + 50:
+    if evaluate_remaining_hand(observation, remaining_hand) > evaluate_remaining_hand(observation, list(observation.my_hand)) + BEST_SCORE_THRESHOLD_WORSE_HAND:
         if is_safe_to_pass(observation):
             return True
 
@@ -228,9 +241,9 @@ def _high_group_penalty(move: Move) -> int:
         return 0
     play_rank = classify_play(move.cards)
     if play_rank.category == PlayCategory.PAIR and move.cards[0].rank >= Rank.ACE:
-        return 30
+        return PENALTY_HIGH_PAIR
     if play_rank.category == PlayCategory.TRIPLE and move.cards[0].rank >= Rank.KING:
-        return 45
+        return PENALTY_HIGH_TRIPLE
     return 0
 
 
@@ -239,9 +252,9 @@ def _strong_five_card_penalty(move: Move) -> int:
         return 0
     play_rank = classify_play(move.cards)
     if play_rank.category in (PlayCategory.FOUR_OF_A_KIND, PlayCategory.STRAIGHT_FLUSH):
-        return 50
+        return PENALTY_POWER_FIVE
     if play_rank.category == PlayCategory.FULL_HOUSE and max(card.rank for card in move.cards) >= Rank.ACE:
-        return 25
+        return PENALTY_HIGH_FULL_HOUSE
     return 0
 
 
@@ -250,7 +263,7 @@ def _remaining_hand_is_strong(move: Move, observation: "Observation") -> bool:
     for card in move.cards:
         remaining.remove(card)
     # Using evaluate_remaining_hand instead of old evaluate_hand_badness
-    return evaluate_remaining_hand(observation, remaining) <= 25 or any(
+    return evaluate_remaining_hand(observation, remaining) <= STRONG_REMAINING_HAND_THRESHOLD or any(
         is_control_card(card, observation) for card in remaining
     )
 
@@ -258,7 +271,7 @@ def _remaining_hand_is_strong(move: Move, observation: "Observation") -> bool:
 def _beating_current_play_is_too_expensive(move: Move, observation: "Observation") -> bool:
     if observation.current_play is None:
         return False
-    return control_card_penalty(move, observation) >= 80
+    return control_card_penalty(move, observation) >= EXPENSIVE_MOVE_THRESHOLD
 
 
 def _is_played_event(event: object) -> bool:

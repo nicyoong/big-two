@@ -5,9 +5,21 @@ from typing import TYPE_CHECKING
 
 from bot import BotBrain, Move, PassMove, generate_legal_plays
 from card import Card, Rank
-from combo_preserving_bot import score_move_level_2
+from combo_preserving_bot import _remove_cards, score_move_level_2
 from control_card_bot import control_card_penalty
 from game import recently_passed_on_kind, recently_passed_on_size
+from heuristics import (
+    DANGER_LEVEL_1_CARD,
+    DANGER_LEVEL_2_CARDS,
+    DANGER_LEVEL_3_4_CARDS,
+    DANGEROUS_OPPONENT_PASSED_KIND_BONUS,
+    DANGEROUS_OPPONENT_PASSED_SIZE_BONUS,
+    NEXT_PLAYER_1_CARD_LOW_SINGLE_PENALTY,
+    OPPONENT_1_CARD_SINGLE_RANK_PENALTY_MULT,
+    OPPONENT_1_CARD_START_LOW_SINGLE_PENALTY,
+    OPPONENT_1_CARD_START_MULTI_CARD_BONUS,
+    OPPONENT_2_CARDS_START_WEAK_PAIR_PENALTY,
+)
 from phase_aware_bot import phase_adjustment
 from rules import PlayCategory, classify_play
 
@@ -47,11 +59,11 @@ def opponent_danger(observation: "Observation", seat_id: str) -> int:
         return 0
     card_count = observation.card_counts_by_seat.get(seat_id)
     if card_count == 1:
-        return 100
+        return DANGER_LEVEL_1_CARD
     if card_count == 2:
-        return 60
+        return DANGER_LEVEL_2_CARDS
     if card_count in (3, 4):
-        return 30
+        return DANGER_LEVEL_3_4_CARDS
     return 0
 
 
@@ -77,9 +89,6 @@ def next_seat_id(observation: "Observation", seat_id: str) -> str:
 
 
 def next_player_is_dangerous(observation: "Observation") -> bool:
-    # prompt says "if the next player has 1 card, be extra careful" 
-    # and "next_player_is_dangerous(observation) -> bool" 
-    # I'll implement it as "has 1 card" based on the strategic behavior rule.
     return observation.card_counts_by_seat.get(next_seat_id(observation, observation.my_seat_id)) == 1
 
 
@@ -90,35 +99,27 @@ def opponent_adjustment(observation: "Observation", move: Move, remaining_hand: 
     is_low_single = is_single and move.cards[0].rank < Rank.JACK
     is_multi_card = len(move.cards) in (2, 3, 5)
 
-    # - If any opponent has 1 card, avoid starting a trick with a low single.
-    # - If any opponent has 1 card, prefer pair/triple/five-card plays when starting.
     if observation.is_starting_new_trick and any_opponent_has_one_card(observation):
         if is_low_single:
-            score += 80
+            score += OPPONENT_1_CARD_START_LOW_SINGLE_PENALTY
         if is_multi_card:
-            score -= 25
+            score += OPPONENT_1_CARD_START_MULTI_CARD_BONUS
 
-    # - If the next player has 1 card, be extra careful with singles.
     if next_player_is_dangerous(observation) and is_low_single:
-        score += 100
+        score += NEXT_PLAYER_1_CARD_LOW_SINGLE_PENALTY
 
-    # - If an opponent has 2 cards, be cautious about starting weak pairs.
     if any(_opponent_card_count(observation, seat_id) == 2 for seat_id in observation.seat_order):
         if observation.is_starting_new_trick and _is_weak_pair(move):
-            score += 35
+            score += OPPONENT_2_CARDS_START_WEAK_PAIR_PENALTY
 
-    # - If forced to play a single while an opponent has 1 card, prefer higher singles.
     if any_opponent_has_one_card(observation) and is_single:
-        # Penalize lower singles more than higher ones.
-        # Rank.TWO is highest, Rank.THREE is lowest.
-        score += int(Rank.TWO - move.cards[0].rank) * 2
+        score += int(Rank.TWO - move.cards[0].rank) * OPPONENT_1_CARD_SINGLE_RANK_PENALTY_MULT
 
-    # - If a dangerous opponent recently passed on a play size or kind, slightly prefer that kind when starting.
     for seat_id in dangerous_opponents(observation):
         if recently_passed_on_size(observation, seat_id, len(move.cards)):
-            score -= 15
+            score += DANGEROUS_OPPONENT_PASSED_SIZE_BONUS
         if recently_passed_on_kind(observation, seat_id, play_rank.category.name.lower()):
-            score -= 10
+            score += DANGEROUS_OPPONENT_PASSED_KIND_BONUS
 
     return score
 
@@ -134,10 +135,3 @@ def _opponent_card_count(observation: "Observation", seat_id: str) -> int | None
     if seat_id == observation.my_seat_id:
         return None
     return observation.card_counts_by_seat.get(seat_id)
-
-
-def _remove_cards(hand: list[Card], cards: list[Card]) -> list[Card]:
-    remaining = list(hand)
-    for card in cards:
-        remaining.remove(card)
-    return sorted(remaining)
