@@ -23,10 +23,10 @@ def make_observation(
         passed_seat_ids=frozenset(),
         card_counts_by_seat=card_counts_by_seat
         or {"seat-1": len(my_hand), "seat-2": 8, "seat-3": 8, "seat-4": 8},
-        played_cards=(),
-        recent_history=(),
         is_starting_new_trick=current_play is None,
         must_include_card=None,
+        recent_events=(),
+        memory_window=8,
     )
 
 

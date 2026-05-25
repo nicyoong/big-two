@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import random
 from dataclasses import dataclass, field
-from typing import Literal
+from typing import ClassVar, Literal
 
 from bot import BotBrain, Move, PassMove, RandomLegalBot
 from card import Card, create_standard_deck
@@ -10,7 +10,6 @@ from rules import InvalidPlayError, can_beat, classify_play
 
 
 PlayerKind = Literal["human", "bot"]
-PublicEventType = Literal["play", "pass", "trick_reset", "win"]
 
 
 class GameError(ValueError):
@@ -64,9 +63,34 @@ class Play:
 
 @dataclass(frozen=True)
 class PublicEvent:
-    event_type: PublicEventType
-    seat_id: str | None = None
-    cards: tuple[Card, ...] = ()
+    turn_number: int
+    trick_number: int
+
+
+@dataclass(frozen=True)
+class PlayedEvent(PublicEvent):
+    seat_id: str
+    cards: tuple[Card, ...]
+    play_kind: str
+    event_type: ClassVar[str] = "play"
+
+
+@dataclass(frozen=True)
+class PassedEvent(PublicEvent):
+    seat_id: str
+    event_type: ClassVar[str] = "pass"
+
+
+@dataclass(frozen=True)
+class TrickResetEvent(PublicEvent):
+    new_leader_seat_id: str | None
+    event_type: ClassVar[str] = "trick_reset"
+
+
+@dataclass(frozen=True)
+class WinEvent(PublicEvent):
+    seat_id: str
+    event_type: ClassVar[str] = "win"
 
 
 @dataclass(frozen=True)
@@ -79,10 +103,10 @@ class Observation:
     current_trick_leader: str | None
     passed_seat_ids: frozenset[str]
     card_counts_by_seat: dict[str, int]
-    played_cards: tuple[Card, ...]
-    recent_history: tuple[PublicEvent, ...]
     is_starting_new_trick: bool
     must_include_card: Card | None
+    recent_events: tuple[PublicEvent, ...] = ()
+    memory_window: int = 8
 
 
 @dataclass(frozen=True)
@@ -94,9 +118,7 @@ class PublicState:
     current_trick_leader: str | None
     passed_seat_ids: frozenset[str]
     card_counts_by_seat: dict[str, int]
-    played_cards: tuple[Card, ...]
     winner: str | None
-    public_history: tuple[PublicEvent, ...]
     is_starting_new_trick: bool
     must_include_card: Card | None
 
@@ -111,6 +133,8 @@ class BigTwoGame:
     passed_seat_ids: set[str] = field(default_factory=set)
     winner: str | None = None
     public_history: list[PublicEvent] = field(default_factory=list)
+    turn_number: int = 0
+    trick_number: int = 1
 
     @classmethod
     def new(
@@ -149,7 +173,7 @@ class BigTwoGame:
     def seat_order(self) -> tuple[str, ...]:
         return tuple(seat.seat_id for seat in self.seats)
 
-    def create_observation(self, seat_id: str) -> Observation:
+    def create_observation(self, seat_id: str, memory_window: int = 8) -> Observation:
         self._require_known_seat(seat_id)
         return Observation(
             my_seat_id=seat_id,
@@ -160,10 +184,10 @@ class BigTwoGame:
             current_trick_leader=self.current_trick_leader,
             passed_seat_ids=frozenset(self.passed_seat_ids),
             card_counts_by_seat=self._card_counts_by_seat(),
-            played_cards=self._played_cards(),
-            recent_history=tuple(self.public_history[-10:]),
             is_starting_new_trick=self.current_play is None,
             must_include_card=self._must_include_card(),
+            recent_events=tuple(self.public_history[-memory_window:]),
+            memory_window=memory_window,
         )
 
     def get_public_state(self) -> PublicState:
@@ -175,9 +199,7 @@ class BigTwoGame:
             current_trick_leader=self.current_trick_leader,
             passed_seat_ids=frozenset(self.passed_seat_ids),
             card_counts_by_seat=self._card_counts_by_seat(),
-            played_cards=self._played_cards(),
             winner=self.winner,
-            public_history=tuple(self.public_history),
             is_starting_new_trick=self.current_play is None,
             must_include_card=self._must_include_card(),
         )
@@ -196,12 +218,21 @@ class BigTwoGame:
         self.current_play = Play(seat_id=seat_id, cards=cards)
         self.current_trick_leader = seat_id
         self.passed_seat_ids.clear()
-        event = PublicEvent(event_type="play", seat_id=seat_id, cards=cards)
+        self.turn_number += 1
+        event = PlayedEvent(
+            turn_number=self.turn_number,
+            trick_number=self.trick_number,
+            seat_id=seat_id,
+            cards=cards,
+            play_kind=classify_play(cards).category.name.lower(),
+        )
         self.public_history.append(event)
 
         if not hand:
             self.winner = seat_id
-            self.public_history.append(PublicEvent(event_type="win", seat_id=seat_id))
+            self.public_history.append(
+                WinEvent(turn_number=self.turn_number, trick_number=self.trick_number, seat_id=seat_id)
+            )
         else:
             self.current_turn_seat_id = self._next_seat_after(seat_id)
 
@@ -215,7 +246,8 @@ class BigTwoGame:
             raise InvalidMoveError("Trick leader cannot pass against their own play")
 
         self.passed_seat_ids.add(seat_id)
-        event = PublicEvent(event_type="pass", seat_id=seat_id)
+        self.turn_number += 1
+        event = PassedEvent(turn_number=self.turn_number, trick_number=self.trick_number, seat_id=seat_id)
         self.public_history.append(event)
 
         if len(self.passed_seat_ids) == len(self.seats) - 1:
@@ -223,7 +255,14 @@ class BigTwoGame:
             self.current_play = None
             self.passed_seat_ids.clear()
             self.current_turn_seat_id = leader or seat_id
-            self.public_history.append(PublicEvent(event_type="trick_reset", seat_id=leader))
+            self.public_history.append(
+                TrickResetEvent(
+                    turn_number=self.turn_number,
+                    trick_number=self.trick_number,
+                    new_leader_seat_id=leader,
+                )
+            )
+            self.trick_number += 1
         else:
             self.current_turn_seat_id = self._next_unpassed_seat_after(seat_id)
 
@@ -255,6 +294,11 @@ class BigTwoGame:
         if self.current_play is not None and not can_beat(cards, self.current_play.cards):
             raise InvalidMoveError("Play does not beat the current play")
 
+        if len(cards) == len(hand):
+            two_spades = Card.from_text("2S")
+            if two_spades in cards:
+                raise InvalidMoveError("Cannot end the game on the 2 of Spades")
+
     def _require_can_act(self, seat_id: str) -> None:
         self._require_known_seat(seat_id)
         if self.winner is not None:
@@ -270,7 +314,12 @@ class BigTwoGame:
         return {seat_id: len(self.hands[seat_id]) for seat_id in self.seat_order}
 
     def _played_cards(self) -> tuple[Card, ...]:
-        return tuple(card for event in self.public_history for card in event.cards)
+        return tuple(
+            card
+            for event in self.public_history
+            if isinstance(event, PlayedEvent)
+            for card in event.cards
+        )
 
     def _must_include_card(self) -> Card | None:
         three_diamonds = Card.from_text("3D")
@@ -309,3 +358,64 @@ def _find_card_holder(hands: dict[str, list[Card]], card: Card) -> str:
         if card in hand:
             return seat_id
     raise InvalidMoveError(f"No seat holds required starting card {card}")
+
+
+def recent_events_by_seat(observation: Observation, seat_id: str) -> list[PublicEvent]:
+    return [
+        event
+        for event in observation.recent_events
+        if _event_seat_id(event) == seat_id
+    ]
+
+
+def recent_passes_by_seat(observation: Observation, seat_id: str) -> list[PassedEvent]:
+    return [
+        event
+        for event in observation.recent_events
+        if isinstance(event, PassedEvent) and event.seat_id == seat_id
+    ]
+
+
+def recent_plays_by_seat(observation: Observation, seat_id: str) -> list[PlayedEvent]:
+    return [
+        event
+        for event in observation.recent_events
+        if isinstance(event, PlayedEvent) and event.seat_id == seat_id
+    ]
+
+
+def recently_passed_on_kind(observation: Observation, seat_id: str, play_kind: str) -> bool:
+    for index, event in enumerate(observation.recent_events):
+        if not isinstance(event, PassedEvent) or event.seat_id != seat_id:
+            continue
+        current_play = _latest_play_before(observation.recent_events, index)
+        if current_play is not None and current_play.play_kind == play_kind:
+            return True
+    return False
+
+
+def recently_passed_on_size(observation: Observation, seat_id: str, size: int) -> bool:
+    for index, event in enumerate(observation.recent_events):
+        if not isinstance(event, PassedEvent) or event.seat_id != seat_id:
+            continue
+        current_play = _latest_play_before(observation.recent_events, index)
+        if current_play is not None and len(current_play.cards) == size:
+            return True
+    return False
+
+
+def _event_seat_id(event: PublicEvent) -> str | None:
+    if isinstance(event, TrickResetEvent):
+        return event.new_leader_seat_id
+    if isinstance(event, (PlayedEvent, PassedEvent, WinEvent)):
+        return event.seat_id
+    return None
+
+
+def _latest_play_before(events: tuple[PublicEvent, ...], index: int) -> PlayedEvent | None:
+    for event in reversed(events[:index]):
+        if isinstance(event, TrickResetEvent):
+            return None
+        if isinstance(event, PlayedEvent):
+            return event
+    return None

@@ -22,10 +22,10 @@ def make_observation(
         current_trick_leader=current_play.seat_id if current_play is not None else None,
         passed_seat_ids=frozenset(),
         card_counts_by_seat={"seat-1": len(my_hand), "seat-2": 13, "seat-3": 13, "seat-4": 13},
-        played_cards=(),
-        recent_history=(),
         is_starting_new_trick=current_play is None,
         must_include_card=must_include_card,
+        recent_events=(),
+        memory_window=8,
     )
 
 

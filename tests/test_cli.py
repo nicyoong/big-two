@@ -2,8 +2,9 @@ import pytest
 
 from bot import Move, PassMove
 from card import Card
-from cli import format_cards, parse_move, play_bot_turn
+from cli import configure_cli_bots, format_cards, parse_move, play_bot_turn
 from game import BigTwoGame
+from phase_aware_bot import PhaseAwareBot
 
 
 def test_parse_move_accepts_pass() -> None:
@@ -23,6 +24,16 @@ def test_parse_move_rejects_empty_input() -> None:
 
 def test_format_cards_sorts_cards() -> None:
     assert format_cards([Card.from_text("4D"), Card.from_text("3S"), Card.from_text("3D")]) == "3D 3S 4D"
+
+
+def test_configure_cli_bots_uses_independent_phase_aware_bots() -> None:
+    game = BigTwoGame.new(human_count=1, seed=1)
+
+    configure_cli_bots(game)
+
+    bot_brains = [seat.bot_brain for seat in game.seats if seat.kind == "bot"]
+    assert all(isinstance(brain, PhaseAwareBot) for brain in bot_brains)
+    assert len({id(brain) for brain in bot_brains}) == len(bot_brains)
 
 
 def test_play_bot_turn_uses_observation_and_records_public_event() -> None:

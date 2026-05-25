@@ -73,5 +73,7 @@ def generate_legal_plays(
                 continue
             if current_play is not None and not can_beat(cards, current_play.cards):
                 continue
+            if len(cards) == len(sorted_hand) and Card.from_text("2S") in cards:
+                continue
             legal_plays.append(cards)
     return legal_plays

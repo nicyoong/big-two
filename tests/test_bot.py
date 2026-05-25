@@ -30,10 +30,10 @@ def make_observation(
         current_trick_leader=current_play.seat_id if current_play is not None else None,
         passed_seat_ids=frozenset(),
         card_counts_by_seat={"seat-1": len(my_hand), "seat-2": 13, "seat-3": 13, "seat-4": 13},
-        played_cards=(),
-        recent_history=(),
         is_starting_new_trick=current_play is None,
         must_include_card=must_include_card,
+        recent_events=(),
+        memory_window=8,
     )
 
 
@@ -113,3 +113,19 @@ def test_two_bot_instances_make_decisions_independently() -> None:
     assert first_rng.calls == 1
     assert second_rng.calls == 1
 
+
+def test_bot_does_not_play_2_spades_as_last_card() -> None:
+    two_spades = Card.from_text("2S")
+    observation = make_observation(
+        my_hand=[two_spades],
+        current_play=None, # New trick
+    )
+    
+    legal_plays = generate_legal_plays(
+        hand=observation.my_hand,
+        current_play=observation.current_play,
+        must_include=observation.must_include_card,
+    )
+    
+    assert (two_spades,) not in legal_plays
+    assert len(legal_plays) == 0

@@ -133,3 +133,27 @@ def test_seeded_deals_are_reproducible() -> None:
     second_game = BigTwoGame.new(human_count=4, seed=42)
 
     assert first_game.hands == second_game.hands
+
+
+def test_rejects_ending_on_2_spades() -> None:
+    game = BigTwoGame.new(human_count=4)
+    seat_id = game.current_turn_seat_id
+    two_spades = Card.from_text("2S")
+    
+    # Force hand to be just 2S and some other cards to play first
+    game.hands[seat_id] = [Card.from_text("3D"), two_spades]
+    
+    # Play 3D first (legal)
+    game.apply_move(seat_id, Move([Card.from_text("3D")]))
+    
+    # Now it's not seat_id's turn, so let others pass
+    for _ in range(3):
+        other_seat = game.current_turn_seat_id
+        game.pass_turn(other_seat)
+        
+    # Now seat_id leads again and has only 2S
+    assert game.current_turn_seat_id == seat_id
+    assert game.hands[seat_id] == [two_spades]
+    
+    with pytest.raises(InvalidMoveError, match="Cannot end the game on the 2 of Spades"):
+        game.apply_move(seat_id, Move([two_spades]))

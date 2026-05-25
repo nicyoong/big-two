@@ -4,7 +4,8 @@ from collections.abc import Callable
 
 from bot import Move, PassMove
 from card import Card, InvalidCardError
-from game import BigTwoGame, GameError, PlayerSeat
+from game import BigTwoGame, GameError, PassedEvent, PlayedEvent, PlayerSeat, TrickResetEvent, WinEvent
+from phase_aware_bot import PhaseAwareBot
 from rules import InvalidPlayError, classify_play
 
 
@@ -24,6 +25,7 @@ def run_cli(
     human_count = prompt_human_count(input_func, output_func)
     human_names = prompt_human_names(human_count, input_func)
     game = BigTwoGame.new(human_count=human_count, human_names=human_names)
+    configure_cli_bots(game)
 
     output_func("")
     output_func("Game started.")
@@ -60,6 +62,12 @@ def prompt_human_names(human_count: int, input_func: InputFunc) -> list[str]:
         raw = input_func(f"Name for player {index + 1} [Player {index + 1}]: ").strip()
         names.append(raw or f"Player {index + 1}")
     return names
+
+
+def configure_cli_bots(game: BigTwoGame) -> None:
+    for seat in game.seats:
+        if seat.kind == "bot":
+            seat.bot_brain = PhaseAwareBot()
 
 
 def play_bot_turn(game: BigTwoGame, seat: PlayerSeat, output_func: OutputFunc) -> None:
@@ -118,13 +126,13 @@ def output_turn_summary(game: BigTwoGame, seat: PlayerSeat, output_func: OutputF
 
 
 def format_event(game: BigTwoGame, event) -> str:  # type: ignore[no-untyped-def]
-    if event.event_type == "play":
+    if isinstance(event, PlayedEvent):
         return f"{seat_name(game, event.seat_id)} played {format_cards(event.cards)} ({format_play_type(event.cards)})"
-    if event.event_type == "pass":
+    if isinstance(event, PassedEvent):
         return f"{seat_name(game, event.seat_id)} passed"
-    if event.event_type == "trick_reset":
-        return f"Trick reset. {seat_name(game, event.seat_id)} leads."
-    if event.event_type == "win":
+    if isinstance(event, TrickResetEvent):
+        return f"Trick reset. {seat_name(game, event.new_leader_seat_id)} leads."
+    if isinstance(event, WinEvent):
         return f"{seat_name(game, event.seat_id)} won"
     return event.event_type
 

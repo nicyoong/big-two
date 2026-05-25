@@ -42,7 +42,13 @@ def is_control_card(card: Card, observation: "Observation") -> bool:
     if card.rank in (Rank.TWO, Rank.ACE):
         return True
     if card.rank == Rank.KING:
-        visible_high_cards = [card for card in observation.played_cards if card.rank in (Rank.ACE, Rank.TWO)]
+        visible_high_cards = [
+            played_card
+            for event in observation.recent_events
+            if _is_played_event(event)
+            for played_card in event.cards
+            if played_card.rank in (Rank.ACE, Rank.TWO)
+        ]
         return len(visible_high_cards) >= 6
     return False
 
@@ -149,3 +155,7 @@ def _beating_current_play_is_too_expensive(move: Move, observation: "Observation
     if observation.current_play is None:
         return False
     return control_card_penalty(move, observation) >= 80
+
+
+def _is_played_event(event: object) -> bool:
+    return hasattr(event, "cards") and hasattr(event, "play_kind")
