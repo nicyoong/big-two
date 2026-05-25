@@ -5,7 +5,7 @@ from collections.abc import Callable
 from bot import Move, PassMove
 from card import Card, InvalidCardError
 from game import BigTwoGame, GameError, PassedEvent, PlayedEvent, PlayerSeat, TrickResetEvent, WinEvent
-from phase_aware_bot import PhaseAwareBot
+from opponent_aware_bot import OpponentAwareBot
 from rules import InvalidPlayError, classify_play
 
 
@@ -67,7 +67,7 @@ def prompt_human_names(human_count: int, input_func: InputFunc) -> list[str]:
 def configure_cli_bots(game: BigTwoGame) -> None:
     for seat in game.seats:
         if seat.kind == "bot":
-            seat.bot_brain = PhaseAwareBot()
+            seat.bot_brain = OpponentAwareBot()
 
 
 def play_bot_turn(game: BigTwoGame, seat: PlayerSeat, output_func: OutputFunc) -> None:
